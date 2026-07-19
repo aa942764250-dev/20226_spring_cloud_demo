@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 轻量加密组件动态表操作Mapper，Oracle 12c+ -->
+<mapper namespace="com.example.service.encryptlite.executor.EncryptLiteDao">
+
+    <select id="batchSelect" resultType="java.util.LinkedHashMap">
+        SELECT
+        <foreach collection="columnNames" item="col" separator=",">
+            ${col}
+        </foreach>
+        FROM ${tableName}
+        <where>
+            <if test="lastPkValue != null">
+                ${pkColumnName} &gt; #{lastPkValue}
+            </if>
+        </where>
+        ORDER BY ${pkColumnName} ASC
+        FETCH FIRST #{batchSize} ROWS ONLY
+    </select>
+
+    <update id="updateRecord">
+        UPDATE ${tableName}
+        <set>
+            <foreach collection="fieldValues" item="val" index="colName" separator=",">
+                ${colName} = #{val}
+            </foreach>
+        </set>
+        WHERE ${pkColumnName} = #{pkValue}
+    </update>
+
+    <select id="queryPrimaryKeyColumn" resultType="string">
+        SELECT acc.COLUMN_NAME
+        FROM ALL_CONSTRAINTS ac
+        JOIN ALL_CONS_COLUMNS acc ON ac.OWNER = acc.OWNER
+            AND ac.CONSTRAINT_NAME = acc.CONSTRAINT_NAME
+        WHERE ac.OWNER = USER
+            AND ac.TABLE_NAME = UPPER(#{tableName})
+            AND ac.CONSTRAINT_TYPE = 'P'
+        FETCH FIRST 1 ROWS ONLY
+    </select>
+
+    <select id="checkTableExists" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) &gt; 0 THEN 1 ELSE 0 END
+        FROM ALL_TABLES
+        WHERE OWNER = USER
+            AND TABLE_NAME = UPPER(#{tableName})
+    </select>
+
+    <select id="checkFieldExists" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) &gt; 0 THEN 1 ELSE 0 END
+        FROM ALL_TAB_COLUMNS
+        WHERE OWNER = USER
+            AND TABLE_NAME = UPPER(#{tableName})
+            AND COLUMN_NAME = UPPER(#{fieldName})
+    </select>
+
+</mapper>

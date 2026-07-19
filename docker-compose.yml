@@ -1,0 +1,47 @@
+version: '3.8'
+
+# 说明：MySQL 和 Nacos 已部署在远程服务器 154.201.68.122
+# 此 compose 仅用于运行 service 和 gateway 应用
+# 环境隔离通过 SPRING_PROFILES_ACTIVE 控制：dev / master
+
+services:
+  springcloud-service:
+    build:
+      context: .
+      dockerfile: springcloud-service/Dockerfile
+    container_name: springcloud-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=master
+      - SPRING_DATASOURCE_URL=jdbc:mysql://154.201.68.122:3306/springcloud_demo?useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=app_user
+      - SPRING_DATASOURCE_PASSWORD=App@Remote2026#User
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=154.201.68.122:8848
+      - SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE=master
+      - SPRING_CLOUD_NACOS_DISCOVERY_USERNAME=nacos
+      - SPRING_CLOUD_NACOS_DISCOVERY_PASSWORD=nacos
+    ports:
+      - "8081:8081"
+    networks:
+      - springcloud-net
+
+  springcloud-gateway:
+    build:
+      context: .
+      dockerfile: springcloud-gateway/Dockerfile
+    container_name: springcloud-gateway
+    environment:
+      - SPRING_PROFILES_ACTIVE=master
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=154.201.68.122:8848
+      - SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE=master
+      - SPRING_CLOUD_NACOS_DISCOVERY_USERNAME=nacos
+      - SPRING_CLOUD_NACOS_DISCOVERY_PASSWORD=nacos
+    ports:
+      - "8080:8080"
+    depends_on:
+      - springcloud-service
+    networks:
+      - springcloud-net
+
+networks:
+  springcloud-net:
+    driver: bridge

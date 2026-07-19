@@ -1,0 +1,46 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: springcloud-service
+  profiles:
+    active: dev
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+encrypt:
+  init:
+    default-algorithm: SM4
+    default-batch-size: 1000
+    default-batch-interval-ms: 0
+    default-skip-encrypted: true
+    db-retry:
+      max-attempts: 3
+      retry-interval-ms: 5000
+    batch-timeout-seconds: 30
+    algorithm-prefix-separator: ":"
+
+logging:
+  level:
+    com.example.service: debug
+
+# 轻量加密组件配置示例
+#encrypt-lite:
+#  default-batch-size: 1000
+#  secret-key: "your-aes-secret-ke"
+#  tables:
+#    table_a:
+#      fields:
+#        - field1
+#        - field2
+#    table_b:
+#      fields:
+#        - field3

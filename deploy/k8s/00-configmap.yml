@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init-sql
+  namespace: springcloud-demo
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS springcloud_demo DEFAULT CHARACTER SET utf8mb4;
+    USE springcloud_demo;
+    CREATE TABLE IF NOT EXISTS `user` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+        `username` VARCHAR(64) NOT NULL COMMENT '用户名',
+        `email` VARCHAR(128) DEFAULT NULL COMMENT '邮箱',
+        `phone` VARCHAR(20) DEFAULT NULL COMMENT '手机号',
+        PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';

@@ -1,0 +1,9 @@
+# 开发环境 (dev namespace)
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 154.201.68.122:8848
+        namespace: dev
+        username: nacos
+        password: nacos

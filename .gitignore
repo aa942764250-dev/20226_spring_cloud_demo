@@ -1,0 +1,11 @@
+*.class
+*.jar
+*.war
+*.zip
+*.log
+target/
+.idea/
+*.iml
+.arts/
+.merkle-snapshot.json
+.codeartsdoer/

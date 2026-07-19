@@ -1,0 +1,17 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: springcloud-gateway
+  profiles:
+    active: dev
+  cloud:
+    gateway:
+      routes:
+        - id: service-route
+          uri: lb://springcloud-service
+          predicates:
+            - Path=/api/**
+          filters:
+            - StripPrefix=1

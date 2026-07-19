@@ -1,0 +1,93 @@
+package com.example.service.dao;
+
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 动态表操作DAO。
+ * <p>
+ * 提供对任意业务表的动态查询和更新能力，支持按主键排序分批读取、
+ * 单记录多字段更新、表/字段元数据查询等操作。
+ * SQL实现见 DynamicTableMapper.xml，使用 Oracle 系统视图查询元数据。
+ * </p>
+ */
+@Mapper
+public interface DynamicTableDao {
+
+    /**
+     * 按主键排序分批读取指定表的指定字段数据。
+     *
+     * @param tableName    目标表名
+     * @param columnNames  需查询的列名列表（含主键列）
+     * @param pkColumnName 主键列名
+     * @param lastPkValue  上一批次最后一条记录的主键值（首次传null）
+     * @param batchSize    批次大小
+     * @return 查询结果列表，每条记录为列名到值的映射
+     */
+    List<Map<String, Object>> batchSelect(@Param("tableName") String tableName,
+                                          @Param("columnNames") List<String> columnNames,
+                                          @Param("pkColumnName") String pkColumnName,
+                                          @Param("lastPkValue") Object lastPkValue,
+                                          @Param("batchSize") int batchSize);
+
+    /**
+     * 更新指定表中单条记录的多个字段值。
+     *
+     * @param tableName    目标表名
+     * @param fieldValues  字段名到新值的映射
+     * @param pkColumnName 主键列名
+     * @param pkValue      主键值
+     * @return 受影响的行数
+     */
+    int updateRecord(@Param("tableName") String tableName,
+                     @Param("fieldValues") Map<String, String> fieldValues,
+                     @Param("pkColumnName") String pkColumnName,
+                     @Param("pkValue") Object pkValue);
+
+    /**
+     * 查询指定表的总记录数。
+     *
+     * @param tableName 目标表名
+     * @return 总记录数
+     */
+    long countByTable(@Param("tableName") String tableName);
+
+    /**
+     * 通过 Oracle 系统视图查询表的主键列名。
+     *
+     * @param tableName 目标表名
+     * @return 主键列名，表无主键时返回 null
+     */
+    String queryPrimaryKeyColumn(@Param("tableName") String tableName);
+
+    /**
+     * 检查指定表是否存在于当前用户的 schema 中。
+     *
+     * @param tableName 目标表名
+     * @return true=存在，false=不存在
+     */
+    boolean checkTableExists(@Param("tableName") String tableName);
+
+    /**
+     * 检查指定字段是否存在于目标表中。
+     *
+     * @param tableName 目标表名
+     * @param fieldName 字段名
+     * @return true=存在，false=不存在
+     */
+    boolean checkFieldExists(@Param("tableName") String tableName,
+                             @Param("fieldName") String fieldName);
+
+    /**
+     * 查询指定字段的数据类型。
+     *
+     * @param tableName 目标表名
+     * @param fieldName 字段名
+     * @return 字段数据类型（如 VARCHAR2、NUMBER），字段不存在时返回 null
+     */
+    String queryFieldType(@Param("tableName") String tableName,
+                          @Param("fieldName") String fieldName);
+}

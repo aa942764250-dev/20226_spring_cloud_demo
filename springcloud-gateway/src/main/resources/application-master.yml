@@ -1,0 +1,9 @@
+# 生产环境 (master namespace)
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 154.201.68.122:8848
+        namespace: master
+        username: nacos
+        password: nacos

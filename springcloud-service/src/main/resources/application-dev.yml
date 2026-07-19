@@ -1,0 +1,14 @@
+# 开发环境配置 (dev namespace)
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://154.201.68.122:3306/springcloud_demo?useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: app_user
+    password: App@Remote2026#User
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 154.201.68.122:8848
+        namespace: dev
+        username: nacos
+        password: nacos
