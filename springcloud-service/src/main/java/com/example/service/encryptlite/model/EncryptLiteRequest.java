@@ -3,7 +3,6 @@ package com.example.service.encryptlite.model;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.util.List;
 
 /**
  * 加密初始化请求DTO。
@@ -11,6 +10,6 @@ import java.util.List;
 @Data
 public class EncryptLiteRequest implements Serializable {
 
-    /** 指定待加密的表名列表，为空时对所有配置表执行 */
-    private List<String> tableNames;
+    /** EXECUTE 模式必填，固定值 ENCRYPT_EXISTING_DATA */
+    private String confirmCode;
 }

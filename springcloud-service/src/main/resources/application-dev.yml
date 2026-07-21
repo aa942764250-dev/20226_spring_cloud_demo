@@ -12,3 +12,9 @@ spring:
         namespace: dev
         username: nacos
         password: nacos
+
+datasource:
+  master:
+    url: jdbc:mysql://154.201.68.122:3306/springcloud_demo_master?useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: app_user
+    password: App@Remote2026#User

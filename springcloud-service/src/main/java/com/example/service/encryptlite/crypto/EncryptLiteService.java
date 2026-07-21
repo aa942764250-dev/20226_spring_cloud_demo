@@ -3,8 +3,8 @@ package com.example.service.encryptlite.crypto;
 /**
  * 轻量加密服务接口。
  * <p>
- * 定义加密方法和已加密判断方法，默认实现为内置AES加密。
- * 替换为公共加密方法时，新增实现类并添加 @Primary 注解即可，无需修改业务代码。
+ * 定义存量字段加密和密文识别两个最小能力。
+ * demo 默认实现使用 SM4；迁移到 eTrust 时可改为调用项目已有 ToolUtil，执行器无需感知算法细节。
  * </p>
  */
 public interface EncryptLiteService {
@@ -13,7 +13,7 @@ public interface EncryptLiteService {
      * 加密明文。
      *
      * @param plaintext 明文字符串
-     * @return 密文字符串（纯密文，无算法前缀）
+     * @return 完整版本化密文，格式为【加密：V1$Base64密文】
      */
     String encrypt(String plaintext);
 
@@ -21,7 +21,7 @@ public interface EncryptLiteService {
      * 判断值是否已被加密。
      *
      * @param value 待判断的值
-     * @return true=已加密，false=未加密
+     * @return true=完整匹配V1密文，false=普通业务值；未知版本直接抛异常
      */
     boolean isEncrypted(String value);
 }

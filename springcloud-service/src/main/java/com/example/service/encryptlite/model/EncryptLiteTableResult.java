@@ -25,4 +25,7 @@ public class EncryptLiteTableResult implements Serializable {
 
     /** 失败详情列表 */
     private List<EncryptLiteErrorDetail> errorDetails;
+
+    /** 校验不通过的原因描述 */
+    private String errorMessage;
 }

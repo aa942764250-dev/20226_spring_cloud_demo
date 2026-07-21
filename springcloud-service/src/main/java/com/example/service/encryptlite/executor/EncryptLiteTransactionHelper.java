@@ -1,5 +1,7 @@
 package com.example.service.encryptlite.executor;
 
+import com.example.service.encryptlite.exception.EncryptLiteErrorCode;
+import com.example.service.encryptlite.exception.EncryptLiteException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -42,7 +44,11 @@ public class EncryptLiteTransactionHelper {
                 }
             }
             if (!fieldValues.isEmpty()) {
-                encryptLiteDao.updateRecord(tableName, fieldValues, pkColumnName, pkValue);
+                int affected = encryptLiteDao.updateRecord(tableName, fieldValues, pkColumnName, pkValue);
+                if (affected != 1) {
+                    throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_DB_WRITE_ERROR,
+                            "数据更新行数异常: expected=1, actual=" + affected);
+                }
             }
         }
     }

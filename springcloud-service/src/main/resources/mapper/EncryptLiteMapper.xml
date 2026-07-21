@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<!-- 轻量加密组件动态表操作Mapper，Oracle 12c+ -->
+<!-- 轻量加密组件动态表操作Mapper，MySQL 8 demo版 -->
 <mapper namespace="com.example.service.encryptlite.executor.EncryptLiteDao">
 
+    <!-- ${}仅用于已通过配置正则校验并经information_schema确认的标识符。 -->
+
+    <!--
+      MySQL demo使用单列主键游标分页：首批无WHERE，后续批次查询 pk > lastPkValue。
+      SQL层排除已加密行（NOT LIKE 'ENC(%'），减少无效IO。
+      迁移Oracle时替换为ROWID/ROWNUM或FETCH FIRST；Java执行流程不需要改变。
+    -->
     <select id="batchSelect" resultType="java.util.LinkedHashMap">
         SELECT
         <foreach collection="columnNames" item="col" separator=",">
@@ -11,13 +18,15 @@
         FROM ${tableName}
         <where>
             <if test="lastPkValue != null">
-                ${pkColumnName} &gt; #{lastPkValue}
+                ${pkColumnName} &gt; #{lastPkValue} AND
             </if>
+            (<foreach collection="columnNames" item="col" separator=" OR ">(${col} IS NOT NULL AND ${col} NOT LIKE 'ENC(%')</foreach>)
         </where>
         ORDER BY ${pkColumnName} ASC
-        FETCH FIRST #{batchSize} ROWS ONLY
+        LIMIT #{batchSize}
     </select>
 
+    <!-- 同一行的多个密文字段在同一UPDATE中写入，并由批次REQUIRES_NEW事务统一提交。 -->
     <update id="updateRecord">
         UPDATE ${tableName}
         <set>
@@ -28,30 +37,35 @@
         WHERE ${pkColumnName} = #{pkValue}
     </update>
 
+    <!-- demo从当前数据库information_schema获取第一个主键列。Oracle版不使用本查询。 -->
     <select id="queryPrimaryKeyColumn" resultType="string">
-        SELECT acc.COLUMN_NAME
-        FROM ALL_CONSTRAINTS ac
-        JOIN ALL_CONS_COLUMNS acc ON ac.OWNER = acc.OWNER
-            AND ac.CONSTRAINT_NAME = acc.CONSTRAINT_NAME
-        WHERE ac.OWNER = USER
-            AND ac.TABLE_NAME = UPPER(#{tableName})
-            AND ac.CONSTRAINT_TYPE = 'P'
-        FETCH FIRST 1 ROWS ONLY
+        SELECT COLUMN_NAME FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{tableName} AND COLUMN_KEY = 'PRI'
+        ORDER BY ORDINAL_POSITION LIMIT 1
     </select>
 
+    <!-- 只允许访问当前DATABASE()，不支持跨库表名。 -->
     <select id="checkTableExists" resultType="boolean">
-        SELECT CASE WHEN COUNT(*) &gt; 0 THEN 1 ELSE 0 END
-        FROM ALL_TABLES
-        WHERE OWNER = USER
-            AND TABLE_NAME = UPPER(#{tableName})
+        SELECT COUNT(*) &gt; 0 FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{tableName}
     </select>
 
+    <!-- 动态字段进入SELECT/UPDATE前必须通过真实元数据确认。 -->
     <select id="checkFieldExists" resultType="boolean">
-        SELECT CASE WHEN COUNT(*) &gt; 0 THEN 1 ELSE 0 END
-        FROM ALL_TAB_COLUMNS
-        WHERE OWNER = USER
-            AND TABLE_NAME = UPPER(#{tableName})
-            AND COLUMN_NAME = UPPER(#{fieldName})
+        SELECT COUNT(*) &gt; 0 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{tableName} AND COLUMN_NAME = #{fieldName}
+    </select>
+
+    <!-- 统计至少有一个字段待加密（非空且非已加密）的行数。 -->
+    <select id="countCandidates" resultType="long">
+        SELECT COUNT(1) FROM ${tableName} WHERE
+        <foreach collection="fields" item="field" separator=" OR ">(${field} IS NOT NULL AND ${field} NOT LIKE 'ENC(%')</foreach>
+    </select>
+
+    <!-- 查询字段字符长度；CHARACTER_MAXIMUM_LENGTH 对 TEXT/CLOB 返回 NULL，COALESCE 为 0。 -->
+    <select id="queryFieldCharLength" resultType="long">
+        SELECT COALESCE(CHARACTER_MAXIMUM_LENGTH, 0) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{tableName} AND COLUMN_NAME = #{fieldName}
     </select>
 
 </mapper>

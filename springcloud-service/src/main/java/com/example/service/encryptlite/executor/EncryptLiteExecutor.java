@@ -1,11 +1,12 @@
 package com.example.service.encryptlite.executor;
 
+import com.example.service.encryptlite.crypto.DefaultEncryptLiteService;
 import com.example.service.encryptlite.config.EncryptLiteProperties;
+import com.example.service.encryptlite.config.EncryptLiteProperties.FieldConfig;
 import com.example.service.encryptlite.crypto.EncryptLiteService;
 import com.example.service.encryptlite.exception.EncryptLiteErrorCode;
 import com.example.service.encryptlite.exception.EncryptLiteException;
 import com.example.service.encryptlite.model.EncryptLiteErrorDetail;
-import com.example.service.encryptlite.model.EncryptLiteRequest;
 import com.example.service.encryptlite.model.EncryptLiteSummaryResult;
 import com.example.service.encryptlite.model.EncryptLiteTableResult;
 import lombok.RequiredArgsConstructor;
@@ -16,14 +17,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-/**
- * 轻量批量加密执行引擎。
- * <p>
- * 核心执行流程：解析配置 → 遍历表 → 按批次读取 → 逐字段加密 → 独立事务回写。
- * 支持任务互斥、已加密数据跳过、异常容错（失败不中断整体流程）。
- * </p>
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,21 +29,105 @@ public class EncryptLiteExecutor {
     private final EncryptLiteProperties properties;
     private final EncryptLiteMutexManager mutexManager;
     private final EncryptLiteTransactionHelper transactionHelper;
+    private final DefaultEncryptLiteService defaultEncryptLiteService;
 
     /**
-     * 执行批量加密初始化。
-     *
-     * @param request 加密请求（可选指定表名列表）
-     * @return 汇总结果
+     * 校验接口：检查 JSON 配置的所有表/字段是否符合加密条件。
+     * CLOB字段(length=0)跳过长度校验，VARCHAR2字段校验长度是否足够。
      */
-    public EncryptLiteSummaryResult execute(EncryptLiteRequest request) {
+    public EncryptLiteSummaryResult verify() {
+        Map<String, EncryptLiteProperties.TableConfig> tableConfigs = requireConfigs();
+        EncryptLiteSummaryResult summary = new EncryptLiteSummaryResult();
+        List<EncryptLiteTableResult> tableResults = new ArrayList<>();
+
+        for (Map.Entry<String, EncryptLiteProperties.TableConfig> entry : tableConfigs.entrySet()) {
+            String tableName = entry.getKey();
+            List<FieldConfig> fields = entry.getValue().getFields();
+            List<String> fieldNames = fields.stream().map(FieldConfig::getName).collect(Collectors.toList());
+
+            EncryptLiteTableResult tableResult = new EncryptLiteTableResult();
+            tableResult.setTableName(tableName);
+
+            if (!encryptLiteDao.checkTableExists(tableName)) {
+                tableResult.setFailedCount(-1);
+                tableResult.setErrorMessage("配置表不存在: " + tableName);
+                tableResults.add(tableResult);
+                continue;
+            }
+
+            for (FieldConfig fc : fields) {
+                if (!encryptLiteDao.checkFieldExists(tableName, fc.getName())) {
+                    tableResult.setFailedCount(tableResult.getFailedCount() + 1);
+                    tableResult.setErrorMessage("字段不存在: " + tableName + "." + fc.getName());
+                    continue;
+                }
+                if (fc.getLength() == 0) continue;
+                long actualLen = encryptLiteDao.queryFieldCharLength(tableName, fc.getName());
+                if (actualLen <= 0) continue;
+                long maxCipher = calcMaxCiphertextLength(actualLen);
+                if (maxCipher > actualLen) {
+                    tableResult.setFailedCount(tableResult.getFailedCount() + 1);
+                    tableResult.setErrorMessage(tableName + "." + fc.getName()
+                            + " 长度" + actualLen + "不足(需" + maxCipher + ")");
+                }
+            }
+
+            tableResults.add(tableResult);
+        }
+
+        int failed = (int) tableResults.stream().filter(t -> t.getFailedCount() != 0).count();
+        summary.setTotalTables(tableConfigs.size());
+        summary.setSuccessTables(tableConfigs.size() - failed);
+        summary.setFailedTables(failed);
+        summary.setTableResults(tableResults);
+        return summary;
+    }
+
+    public EncryptLiteSummaryResult check() {
+        Map<String, EncryptLiteProperties.TableConfig> tableConfigs = requireConfigs();
+        EncryptLiteSummaryResult summary = new EncryptLiteSummaryResult();
+        List<EncryptLiteTableResult> tableResults = new ArrayList<>();
+
+        for (Map.Entry<String, EncryptLiteProperties.TableConfig> entry : tableConfigs.entrySet()) {
+            String tableName = entry.getKey();
+            List<FieldConfig> fields = entry.getValue().getFields();
+            List<String> fieldNames = fields.stream().map(FieldConfig::getName).collect(Collectors.toList());
+
+            if (!encryptLiteDao.checkTableExists(tableName)) {
+                throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "配置表不存在: " + tableName);
+            }
+            String pkColumnName = encryptLiteDao.queryPrimaryKeyColumn(tableName);
+            if (pkColumnName == null) {
+                throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "配置表没有主键: " + tableName);
+            }
+            for (FieldConfig fc : fields) {
+                if (!encryptLiteDao.checkFieldExists(tableName, fc.getName())) {
+                    throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "配置字段不存在: " + tableName + "." + fc.getName());
+                }
+            }
+
+            long candidateRows = encryptLiteDao.countCandidates(tableName, fieldNames);
+            EncryptLiteTableResult tableResult = new EncryptLiteTableResult();
+            tableResult.setTableName(tableName);
+            tableResult.setSkippedCount(candidateRows);
+            tableResults.add(tableResult);
+        }
+
+        summary.setTotalTables(tableConfigs.size());
+        summary.setSuccessTables(tableConfigs.size());
+        summary.setFailedTables(0);
+        summary.setTableResults(tableResults);
+        return summary;
+    }
+
+    public EncryptLiteSummaryResult execute() {
         if (!mutexManager.tryAcquire()) {
             throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_TASK_RUNNING);
         }
 
         try {
-            Map<String, EncryptLiteProperties.TableConfig> tableConfigs = resolveConfigs(request);
-
+            defaultEncryptLiteService.selfCheck();
+            Map<String, EncryptLiteProperties.TableConfig> tableConfigs = requireConfigs();
             EncryptLiteSummaryResult summary = new EncryptLiteSummaryResult();
             List<EncryptLiteTableResult> tableResults = new ArrayList<>();
             int successTables = 0;
@@ -56,7 +135,7 @@ public class EncryptLiteExecutor {
 
             for (Map.Entry<String, EncryptLiteProperties.TableConfig> entry : tableConfigs.entrySet()) {
                 String tableName = entry.getKey();
-                List<String> fields = entry.getValue().getFields();
+                List<FieldConfig> fields = entry.getValue().getFields();
 
                 EncryptLiteTableResult tableResult = processTable(tableName, fields);
                 tableResults.add(tableResult);
@@ -78,39 +157,15 @@ public class EncryptLiteExecutor {
         }
     }
 
-    /**
-     * 解析请求，确定待加密的表配置列表。
-     */
-    private Map<String, EncryptLiteProperties.TableConfig> resolveConfigs(EncryptLiteRequest request) {
-        Map<String, EncryptLiteProperties.TableConfig> allConfigs = properties.getTables();
-        if (allConfigs == null || allConfigs.isEmpty()) {
+    private Map<String, EncryptLiteProperties.TableConfig> requireConfigs() {
+        Map<String, EncryptLiteProperties.TableConfig> tableConfigs = properties.getTables();
+        if (tableConfigs == null || tableConfigs.isEmpty()) {
             throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_NO_CONFIG);
         }
-
-        if (request == null || request.getTableNames() == null || request.getTableNames().isEmpty()) {
-            return allConfigs;
-        }
-
-        Map<String, EncryptLiteProperties.TableConfig> filtered = new HashMap<>();
-        for (String tableName : request.getTableNames()) {
-            EncryptLiteProperties.TableConfig config = allConfigs.get(tableName);
-            if (config == null) {
-                log.warn("表 {} 未在配置中找到，跳过", tableName);
-                continue;
-            }
-            filtered.put(tableName, config);
-        }
-
-        if (filtered.isEmpty()) {
-            throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_NO_CONFIG, "指定的表均未配置加密规则");
-        }
-        return filtered;
+        return tableConfigs;
     }
 
-    /**
-     * 处理单张表的加密。
-     */
-    private EncryptLiteTableResult processTable(String tableName, List<String> fields) {
+    private EncryptLiteTableResult processTable(String tableName, List<FieldConfig> fields) {
         EncryptLiteTableResult result = new EncryptLiteTableResult();
         result.setTableName(tableName);
         result.setSuccessCount(0);
@@ -119,29 +174,24 @@ public class EncryptLiteExecutor {
         List<EncryptLiteErrorDetail> errorDetails = new ArrayList<>();
 
         if (!encryptLiteDao.checkTableExists(tableName)) {
-            log.warn("表 {} 不存在，跳过", tableName);
-            result.setErrorDetails(errorDetails);
-            return result;
+            throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "配置表不存在: " + tableName);
         }
 
         String pkColumnName = encryptLiteDao.queryPrimaryKeyColumn(tableName);
         if (pkColumnName == null) {
-            log.warn("表 {} 无主键，跳过", tableName);
-            result.setErrorDetails(errorDetails);
-            return result;
+            throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "配置表没有主键: " + tableName);
         }
 
-        List<String> validFields = new ArrayList<>();
-        for (String field : fields) {
-            if (field.equalsIgnoreCase(pkColumnName)) {
-                log.warn("表 {} 的字段 {} 为主键，跳过加密", tableName, field);
+        List<FieldConfig> validFields = new ArrayList<>();
+        for (FieldConfig fc : fields) {
+            if (fc.getName().equalsIgnoreCase(pkColumnName)) {
+                log.warn("表 {} 的字段 {} 为主键，跳过加密", tableName, fc.getName());
                 continue;
             }
-            if (!encryptLiteDao.checkFieldExists(tableName, field)) {
-                log.warn("表 {} 的字段 {} 不存在，跳过", tableName, field);
-                continue;
+            if (!encryptLiteDao.checkFieldExists(tableName, fc.getName())) {
+                throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "配置字段不存在: " + tableName + "." + fc.getName());
             }
-            validFields.add(field);
+            validFields.add(fc);
         }
 
         if (validFields.isEmpty()) {
@@ -150,7 +200,7 @@ public class EncryptLiteExecutor {
             return result;
         }
 
-        List<String> columnNames = new ArrayList<>(validFields);
+        List<String> columnNames = validFields.stream().map(FieldConfig::getName).collect(Collectors.toList());
         columnNames.add(pkColumnName);
 
         int batchSize = properties.getDefaultBatchSize();
@@ -165,7 +215,7 @@ public class EncryptLiteExecutor {
                 batchData = encryptLiteDao.batchSelect(tableName, columnNames, pkColumnName, lastPkValue, batchSize);
             } catch (Exception e) {
                 log.error("读取表 {} 数据失败", tableName, e);
-                failedCount += batchSize;
+                failedCount = -1;
                 break;
             }
 
@@ -179,40 +229,39 @@ public class EncryptLiteExecutor {
                 Object pkValue = record.get(pkColumnName);
                 Map<String, Object> encryptedRecord = new HashMap<>();
                 encryptedRecord.put(pkColumnName, pkValue);
-                boolean recordSuccess = true;
+                boolean changed = false;
 
-                for (String field : validFields) {
-                    Object fieldValue = record.get(field);
+                for (FieldConfig fc : validFields) {
+                    Object fieldValue = record.get(fc.getName());
                     if (fieldValue == null) {
-                        skippedCount++;
                         continue;
                     }
 
                     String originalValue = fieldValue.toString();
                     if (encryptLiteService.isEncrypted(originalValue)) {
-                        skippedCount++;
                         continue;
                     }
 
                     try {
                         String encryptedValue = encryptLiteService.encrypt(originalValue);
-                        encryptedRecord.put(field, encryptedValue);
+                        encryptedRecord.put(fc.getName(), encryptedValue);
+                        changed = true;
                     } catch (Exception e) {
                         EncryptLiteErrorDetail detail = new EncryptLiteErrorDetail();
                         detail.setPrimaryKeyValue(String.valueOf(pkValue));
-                        detail.setFieldName(field);
+                        detail.setFieldName(fc.getName());
                         detail.setErrorCode(EncryptLiteErrorCode.ENCRYPT_METHOD_ERROR.name());
                         detail.setErrorMessage(e.getMessage());
                         errorDetails.add(detail);
-                        recordSuccess = false;
-                        break;
+                        throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_METHOD_ERROR,
+                                "表 " + tableName + " 字段 " + fc.getName() + " 加密失败", e);
                     }
                 }
 
-                if (recordSuccess && encryptedRecord.size() > 1) {
+                if (encryptedRecord.size() > 1) {
                     successRecords.add(encryptedRecord);
-                } else if (!recordSuccess) {
-                    failedCount++;
+                } else if (!changed) {
+                    skippedCount++;
                 }
             }
 
@@ -229,12 +278,13 @@ public class EncryptLiteExecutor {
                         detail.setErrorMessage(e.getMessage());
                         errorDetails.add(detail);
                     }
-                    failedCount += successRecords.size();
+                    throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_DB_WRITE_ERROR,
+                            "表 " + tableName + " 批次回写失败", e);
                 }
             }
 
             lastPkValue = batchData.get(batchData.size() - 1).get(pkColumnName);
-            log.info("表 {} 批次完成, success={}, failed={}, skipped={}", tableName, successCount, failedCount, skippedCount);
+            log.info("DATA_INIT_ENCRYPT BATCH_END table={} success={} skipped={}", tableName, successCount, skippedCount);
         }
 
         result.setSuccessCount(successCount);
@@ -242,5 +292,11 @@ public class EncryptLiteExecutor {
         result.setSkippedCount(skippedCount);
         result.setErrorDetails(errorDetails);
         return result;
+    }
+
+    static long calcMaxCiphertextLength(long fieldCharLength) {
+        long cipherBytes = (long) Math.ceil((fieldCharLength + 1) / 16.0) * 16;
+        long base64Chars = (long) Math.ceil(cipherBytes / 3.0) * 4;
+        return 5 + base64Chars;
     }
 }

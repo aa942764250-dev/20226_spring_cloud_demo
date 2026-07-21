@@ -12,14 +12,14 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 通用 SQL 查询接口。
  * <p>
- * 仅在 dev profile 下启用，用于本地数据库调试。
+ * 在 dev 和 master profile 下启用，用于数据库调试。
  * 仅允许 SELECT 语句，强制行数限制和查询超时。
  * </p>
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/query")
-@Profile("dev")
+@Profile({"dev", "master"})
 @RequiredArgsConstructor
 public class QueryController {
 

@@ -5,19 +5,20 @@ import com.example.service.encryptlite.exception.EncryptLiteErrorCode;
 import com.example.service.encryptlite.exception.EncryptLiteException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.security.Security;
+import java.util.regex.Pattern;
 
 /**
- * 默认AES加密服务实现。
+ * demo使用的SM4加密实现。
  * <p>
- * 使用JDK内置的AES对称加密，密文通过Base64编码输出，不含算法前缀。
- * 密钥从 EncryptLiteProperties.secretKey 读取，未配置时使用默认密钥。
- * 已加密判断策略：尝试Base64解码，解码成功且解码后字节长度为16的倍数则判定为已加密。
+ * 使用SM4/ECB/PKCS5Padding，密文格式固定为ENC(Base64密文)。
  * </p>
  */
 @Slf4j
@@ -25,20 +26,25 @@ import java.util.Base64;
 @RequiredArgsConstructor
 public class DefaultEncryptLiteService implements EncryptLiteService {
 
-    private static final String ALGORITHM = "AES";
-    private static final String DEFAULT_SECRET_KEY = "encryptlite12345";
+    private static final String ALGORITHM = "SM4";
+    private static final String TRANSFORMATION = "SM4/ECB/PKCS5Padding";
+    private static final String PREFIX = "ENC(";
+    private static final String SUFFIX = ")";
+    private static final Pattern ENC = Pattern.compile("^ENC\\([A-Za-z0-9+/=]+\\)$");
+
+    static { Security.addProvider(new BouncyCastleProvider()); }
 
     private final EncryptLiteProperties properties;
 
     @Override
     public String encrypt(String plaintext) {
         try {
-            String key = resolveKey();
-            SecretKeySpec keySpec = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), ALGORITHM);
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            byte[] key = resolveKey();
+            SecretKeySpec keySpec = new SecretKeySpec(key, ALGORITHM);
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION, "BC");
             cipher.init(Cipher.ENCRYPT_MODE, keySpec);
             byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(encrypted);
+            return PREFIX + Base64.getEncoder().encodeToString(encrypted) + SUFFIX;
         } catch (Exception e) {
             throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_METHOD_ERROR, e.getMessage(), e);
         }
@@ -49,26 +55,38 @@ public class DefaultEncryptLiteService implements EncryptLiteService {
         if (value == null || value.isEmpty()) {
             return false;
         }
+        return ENC.matcher(value).matches();
+    }
+
+    public void selfCheck() {
         try {
-            byte[] decoded = Base64.getDecoder().decode(value);
-            return decoded.length > 0 && decoded.length % 16 == 0;
-        } catch (IllegalArgumentException e) {
-            return false;
+            byte[] key = resolveKey();
+            SecretKeySpec keySpec = new SecretKeySpec(key, ALGORITHM);
+            Cipher encCipher = Cipher.getInstance(TRANSFORMATION, "BC");
+            encCipher.init(Cipher.ENCRYPT_MODE, keySpec);
+            byte[] encrypted = encCipher.doFinal("SELF_CHECK".getBytes(StandardCharsets.UTF_8));
+
+            Cipher decCipher = Cipher.getInstance(TRANSFORMATION, "BC");
+            decCipher.init(Cipher.DECRYPT_MODE, keySpec);
+            byte[] decrypted = decCipher.doFinal(encrypted);
+
+            if (!"SELF_CHECK".equals(new String(decrypted, StandardCharsets.UTF_8))) {
+                throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "加解密自检失败：往返不一致");
+            }
+        } catch (EncryptLiteException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "加解密自检失败: " + e.getMessage(), e);
         }
     }
 
-    private String resolveKey() {
+    private byte[] resolveKey() {
         String key = properties.getSecretKey();
-        if (key == null || key.isEmpty()) {
-            return DEFAULT_SECRET_KEY;
-        }
-        if (key.length() != 16) {
-            log.warn("secret-key 长度非16字节，将截断或填充至16字节");
-            if (key.length() > 16) {
-                return key.substring(0, 16);
-            }
-            return key + DEFAULT_SECRET_KEY.substring(0, 16 - key.length());
-        }
-        return key;
+        if (key == null || key.isEmpty()) throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "密钥未配置");
+        byte[] decoded;
+        try { decoded = Base64.getDecoder().decode(key); }
+        catch (IllegalArgumentException e) { throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "密钥不是合法Base64"); }
+        if (decoded.length != 16) throw new EncryptLiteException(EncryptLiteErrorCode.ENCRYPT_CONFIG_INVALID, "SM4密钥必须为16字节");
+        return decoded;
     }
 }

@@ -32,15 +32,8 @@ logging:
   level:
     com.example.service: debug
 
-# 轻量加密组件配置示例
-#encrypt-lite:
-#  default-batch-size: 1000
-#  secret-key: "your-aes-secret-ke"
-#  tables:
-#    table_a:
-#      fields:
-#        - field1
-#        - field2
-#    table_b:
-#      fields:
-#        - field3
+encrypt-lite:
+  enabled: false
+  default-batch-size: 200
+  config-path: ${ENCRYPT_LITE_CONFIG_PATH:}
+  secret-key: ${DATA_INIT_ENCRYPT_KEY:}

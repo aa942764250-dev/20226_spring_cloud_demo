@@ -1,6 +1,6 @@
 package com.example.service.controller.query;
 
-import lombok.RequiredArgsConstructor;
+import com.example.service.config.DynamicDataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,13 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-/**
- * 通用 SQL 查询服务。
- * <p>
- * 仅允许 SELECT 语句，强制行数限制，只读事务，查询超时 10 秒。
- * 仅用于本地开发环境数据库调试。
- * </p>
- */
 @Slf4j
 @Service
 public class QueryService {
@@ -28,9 +21,6 @@ public class QueryService {
     private static final int MAX_LIMIT = 1000;
     private static final int QUERY_TIMEOUT_SECONDS = 10;
 
-    /**
-     * 禁止的危险关键字（SQL 语义中），用于二次校验。
-     */
     private static final Pattern DANGEROUS_KEYWORDS = Pattern.compile(
             "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|REPLACE|MERGE|CALL|EXEC|EXECUTE|LOAD_FILE|INTO\\s+OUTFILE|INTO\\s+DUMPFILE)\\b",
             Pattern.CASE_INSENSITIVE);
@@ -51,6 +41,10 @@ public class QueryService {
      */
     @Transactional(readOnly = true, timeout = QUERY_TIMEOUT_SECONDS)
     public QueryResult execute(QueryRequest request) {
+        if (request.getDatasource() != null && !request.getDatasource().trim().isEmpty()) {
+            DynamicDataSource.setKey(request.getDatasource().trim());
+        }
+
         if (request.getSql() == null || request.getSql().trim().isEmpty()) {
             throw new IllegalArgumentException("SQL 不能为空");
         }
@@ -59,7 +53,8 @@ public class QueryService {
 
         // 安全校验：仅允许 SELECT
         if (!isSelectOnly(rawSql)) {
-            throw new IllegalArgumentException("仅允许 SELECT 查询语句");
+            log.warn("【通用查询】SQL 被拒绝，非 SELECT 语句: {}", rawSql);
+            throw new IllegalArgumentException("仅允许 SELECT 查询语句，当前 SQL: " + rawSql);
         }
 
         // 行数限制

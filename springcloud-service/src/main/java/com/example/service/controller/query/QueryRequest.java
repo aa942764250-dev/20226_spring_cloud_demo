@@ -8,13 +8,9 @@ import lombok.Data;
 @Data
 public class QueryRequest {
 
-    /**
-     * 待执行的 SQL 语句（仅允许 SELECT）。
-     */
     private String sql;
 
-    /**
-     * 返回行数上限，可选，默认 100，最大 1000。
-     */
     private Integer limit;
+
+    private String datasource;
 }
