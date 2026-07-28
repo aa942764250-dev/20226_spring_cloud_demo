@@ -37,3 +37,9 @@ encrypt-lite:
   default-batch-size: 200
   config-path: ${ENCRYPT_LITE_CONFIG_PATH:}
   secret-key: ${DATA_INIT_ENCRYPT_KEY:}
+
+review:
+  python-path: C:\Users\黄\AppData\Local\Programs\Python\Python312\python.exe
+  kb-script-path: D:\Workspace\Project_006_LocalKnowledgeMCP\kb.py
+  search-timeout-seconds: 60
+  enabled: true
