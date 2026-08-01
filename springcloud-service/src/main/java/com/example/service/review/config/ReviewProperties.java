@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class ReviewProperties {
     private String pythonPath = "python";
     private String kbScriptPath;
-    private int searchTimeoutSeconds = 60;
+    private String kbServerUrl = "http://127.0.0.1:9876";
+    private int searchTimeoutSeconds = 30;
     private boolean enabled = true;
 }

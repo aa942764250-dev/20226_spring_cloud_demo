@@ -41,5 +41,13 @@ encrypt-lite:
 review:
   python-path: C:\Users\黄\AppData\Local\Programs\Python\Python312\python.exe
   kb-script-path: D:\Workspace\Project_006_LocalKnowledgeMCP\kb.py
-  search-timeout-seconds: 60
+  kb-server-url: http://127.0.0.1:9876
+  search-timeout-seconds: 30
   enabled: true
+
+ai-teacher:
+  gemini-api-key: ${GEMINI_API_KEY:}
+  gemini-model: gemini-2.5-flash
+  timeout-seconds: 60
+  max-retries: 2
+  default-teacher-id: 1

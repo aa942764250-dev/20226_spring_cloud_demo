@@ -9,12 +9,14 @@ import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -27,49 +29,36 @@ public class KnowledgeSearchClient {
     public List<Map<String, String>> search(String query, int topK) {
         List<Map<String, String>> results = new ArrayList<>();
         try {
-            ProcessBuilder pb = new ProcessBuilder(
-                    reviewProperties.getPythonPath(),
-                    reviewProperties.getKbScriptPath(),
-                    "search",
-                    query,
-                    "--top-k", String.valueOf(topK)
-            );
-            pb.directory(new java.io.File(reviewProperties.getKbScriptPath()).getParentFile());
-            pb.redirectErrorStream(true);
+            String baseUrl = reviewProperties.getKbServerUrl();
+            if (baseUrl == null || baseUrl.isBlank()) {
+                log.warn("kb-server-url not configured, returning empty results");
+                return results;
+            }
 
-            Map<String, String> env = pb.environment();
-            env.put("HF_HUB_OFFLINE", "1");
-            env.remove("ALL_PROXY");
-            env.remove("all_proxy");
+            String url = baseUrl + "/search?q=" + java.net.URLEncoder.encode(query, StandardCharsets.UTF_8) + "&top_k=" + topK;
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(reviewProperties.getSearchTimeoutSeconds() * 1000);
 
-            Process process = pb.start();
-            StringBuilder output = new StringBuilder();
+            int code = conn.getResponseCode();
+            if (code != 200) {
+                log.warn("KB server returned {}: query={}", code, query);
+                conn.disconnect();
+                return results;
+            }
+
+            StringBuilder body = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
+                    body.append(line);
                 }
             }
+            conn.disconnect();
 
-            boolean finished = process.waitFor(reviewProperties.getSearchTimeoutSeconds(), TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                log.warn("kb.py search 超时: query={}", query);
-                return results;
-            }
-
-            if (process.exitValue() != 0) {
-                log.warn("kb.py search 返回非零退出码 {}: query={}", process.exitValue(), query);
-                return results;
-            }
-
-            String json = output.toString().trim();
-            if (json.isEmpty()) {
-                return results;
-            }
-
-            JsonNode root = objectMapper.readTree(json);
+            JsonNode root = objectMapper.readTree(body.toString());
             JsonNode resultsNode = root.has("results") ? root.get("results") : root;
             if (resultsNode.isArray()) {
                 for (JsonNode item : resultsNode) {
@@ -84,7 +73,7 @@ public class KnowledgeSearchClient {
                 }
             }
         } catch (Exception e) {
-            log.error("kb.py search 调用失败: query={}", query, e);
+            log.error("KB server search failed: query={}", query, e);
         }
         return results;
     }
