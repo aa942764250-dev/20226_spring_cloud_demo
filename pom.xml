@@ -14,7 +14,8 @@
         <module>springcloud-api</module>
         <module>springcloud-gateway</module>
         <module>springcloud-service</module>
-        <module>mario-game</module>
+        <module>workbench-service</module>
+        <module>ai-teacher-service</module>
     </modules>
 
     <parent>

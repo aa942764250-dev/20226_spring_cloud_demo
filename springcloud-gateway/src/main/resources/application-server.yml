@@ -1,0 +1,31 @@
+# 远程服务器部署：连服务器 Nacos(master) + lb:// 路由
+# 在服务器上 docker compose -f docker-compose.server.yml up -d --build
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 154.201.68.122:8848
+        namespace: master
+        username: nacos
+        password: nacos
+        fail-fast: false
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: workbench-route
+          uri: lb://workbench-service
+          predicates:
+            - Path=/api/wb/**
+          filters:
+            - StripPrefix=1
+        - id: ai-teacher-route
+          uri: lb://ai-teacher-service
+          predicates:
+            - Path=/api/ai-teacher/**
+          filters:
+            - StripPrefix=1
+gateway:
+  jwt:
+    secret: ${GATEWAY_JWT_SECRET:workbench-secret-key-must-be-at-least-256-bits-long-please-change}

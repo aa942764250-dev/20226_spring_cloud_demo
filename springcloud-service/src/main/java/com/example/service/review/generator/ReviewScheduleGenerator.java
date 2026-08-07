@@ -1,7 +1,10 @@
 package com.example.service.review.generator;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.api.entity.GenerationLog;
 import com.example.api.entity.ReviewDaily;
 import com.example.api.entity.ReviewItem;
+import com.example.service.dao.GenerationLogDao;
 import com.example.service.dao.ReviewDailyDao;
 import com.example.service.dao.ReviewItemDao;
 import lombok.RequiredArgsConstructor;
@@ -11,103 +14,89 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class ReviewScheduleGenerator {
 
-    private final KnowledgeSearchClient knowledgeSearchClient;
+    private final GenerationAsyncExecutor asyncExecutor;
     private final ReviewDailyDao reviewDailyDao;
+    private final GenerationLogDao generationLogDao;
     private final ReviewItemDao reviewItemDao;
-
-    private static final LinkedHashMap<String, String[]> MODULE_QUERIES = new LinkedHashMap<>();
-    static {
-        MODULE_QUERIES.put("Java基础", new String[]{"Java基本类型", "String StringBuilder", "final关键字"});
-        MODULE_QUERIES.put("集合框架", new String[]{"HashMap原理", "ArrayList LinkedList", "ConcurrentHashMap"});
-        MODULE_QUERIES.put("多线程与锁", new String[]{"synchronized原理", "ReentrantLock", "volatile关键字"});
-        MODULE_QUERIES.put("线程池", new String[]{"ThreadPoolExecutor参数", "线程池拒绝策略", "线程池工作原理"});
-        MODULE_QUERIES.put("JVM", new String[]{"JVM内存模型", "GC算法", "类加载机制"});
-        MODULE_QUERIES.put("Spring", new String[]{"Spring IOC原理", "Spring AOP", "Spring Bean生命周期"});
-        MODULE_QUERIES.put("MySQL", new String[]{"MySQL索引原理", "事务隔离级别", "InnoDB存储引擎"});
-        MODULE_QUERIES.put("Redis", new String[]{"Redis数据类型", "Redis持久化", "Redis集群"});
-        MODULE_QUERIES.put("设计模式", new String[]{"单例模式", "工厂模式", "策略模式"});
-    }
+    private final SelfTestQuestionGenerator selfTestQuestionGenerator;
 
     @Scheduled(cron = "0 0 6 * * ?")
     public void generateDailyReview() {
-        log.info("开始生成每日复习重点...");
-        try {
-            doGenerate(LocalDate.now());
-        } catch (Exception e) {
-            log.error("生成每日复习重点失败", e);
-        }
+        log.info("[定时] 开始生成每日复习重点...");
+        triggerGenerate(LocalDate.now(), "scheduled");
     }
 
-    public void doGenerate(LocalDate date) {
+    public GenerationLog triggerGenerate(LocalDate date, String type) {
+        GenerationLog runningLog = findRunningLog(date);
+        if (runningLog != null) {
+            log.info("日期 {} 已有正在运行的生成任务(id={})，跳过", date, runningLog.getId());
+            return runningLog;
+        }
+
         ReviewDaily existing = getExistingDaily(date);
         if (existing != null && existing.getStatus() == 1) {
-            log.info("日期 {} 的复习内容已存在，跳过生成", date);
-            return;
-        }
-
-        List<ReviewItem> allItems = new ArrayList<>();
-        Set<String> seenQuestions = new HashSet<>();
-        int sortOrder = 0;
-
-        for (Map.Entry<String, String[]> entry : MODULE_QUERIES.entrySet()) {
-            String moduleName = entry.getKey();
-            for (String query : entry.getValue()) {
-                List<Map<String, String>> results = knowledgeSearchClient.search(query, 3);
-                for (Map<String, String> result : results) {
-                    String question = result.get("question");
-                    if (question == null || question.isEmpty() || seenQuestions.contains(question)) {
-                        continue;
-                    }
-                    seenQuestions.add(question);
-
-                    ReviewItem item = new ReviewItem();
-                    item.setModuleName(moduleName);
-                    item.setQuestion(question);
-                    item.setAnswer(result.getOrDefault("answer", ""));
-                    item.setSource(result.getOrDefault("source", ""));
-                    item.setSortOrder(sortOrder++);
-                    item.setCreatedAt(LocalDateTime.now());
-                    allItems.add(item);
-                }
+            long testCount = countTestItems(existing.getId());
+            if (testCount > 0) {
+                log.info("日期 {} 的复习内容已存在且含自测题，跳过生成", date);
+                GenerationLog logEntity = new GenerationLog();
+                logEntity.setTargetDate(date);
+                logEntity.setType(type);
+                logEntity.setStatus("skipped");
+                logEntity.setReviewItemCount(existing.getItemCount());
+                logEntity.setModuleCount(existing.getModuleCount());
+                logEntity.setStartedAt(LocalDateTime.now());
+                logEntity.setFinishedAt(LocalDateTime.now());
+                logEntity.setDurationMs(0L);
+                generationLogDao.insert(logEntity);
+                return logEntity;
             }
+            log.info("日期 {} 的复习内容存在但缺少自测题，补生成自测题", date);
+            GenerationLog logEntity = new GenerationLog();
+            logEntity.setTargetDate(date);
+            logEntity.setType(type);
+            logEntity.setStatus("running");
+            logEntity.setStartedAt(LocalDateTime.now());
+            generationLogDao.insert(logEntity);
+            asyncExecutor.executeSupplementTest(date, existing.getId(), logEntity.getId());
+            return logEntity;
         }
 
-        if (allItems.isEmpty()) {
-            log.warn("未检索到任何复习题目，跳过生成");
-            return;
-        }
+        GenerationLog logEntity = new GenerationLog();
+        logEntity.setTargetDate(date);
+        logEntity.setType(type);
+        logEntity.setStatus("running");
+        logEntity.setStartedAt(LocalDateTime.now());
+        generationLogDao.insert(logEntity);
 
-        long moduleCount = allItems.stream().map(ReviewItem::getModuleName).distinct().count();
+        asyncExecutor.executeAsync(date, logEntity.getId());
+        return logEntity;
+    }
 
-        ReviewDaily daily = new ReviewDaily();
-        daily.setReviewDate(date);
-        daily.setTitle(date + " Java面试复习重点");
-        daily.setModuleCount((int) moduleCount);
-        daily.setItemCount(allItems.size());
-        daily.setStatus(1);
-        daily.setCreatedAt(LocalDateTime.now());
-        daily.setUpdatedAt(LocalDateTime.now());
-        reviewDailyDao.insert(daily);
-
-        for (ReviewItem item : allItems) {
-            item.setDailyId(daily.getId());
-            reviewItemDao.insert(item);
-        }
-
-        log.info("生成完成: date={}, modules={}, items={}", date, moduleCount, allItems.size());
+    public GenerationLog findRunningLog(LocalDate date) {
+        LambdaQueryWrapper<GenerationLog> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(GenerationLog::getTargetDate, date)
+               .eq(GenerationLog::getStatus, "running")
+               .orderByDesc(GenerationLog::getStartedAt)
+               .last("LIMIT 1");
+        return generationLogDao.selectOne(wrapper);
     }
 
     private ReviewDaily getExistingDaily(LocalDate date) {
-        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ReviewDaily> wrapper =
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        LambdaQueryWrapper<ReviewDaily> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ReviewDaily::getReviewDate, date);
         return reviewDailyDao.selectOne(wrapper);
+    }
+
+    private long countTestItems(Long dailyId) {
+        LambdaQueryWrapper<ReviewItem> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ReviewItem::getDailyId, dailyId)
+               .ne(ReviewItem::getQuestionType, "review");
+        return reviewItemDao.selectCount(wrapper);
     }
 }

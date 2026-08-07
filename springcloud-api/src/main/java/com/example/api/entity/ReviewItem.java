@@ -20,6 +20,12 @@ public class ReviewItem implements Serializable {
     private Integer sortOrder;
     /** 来源文档名 */
     private String source;
+    /** 题目类型：review=复习重点 fill_blank=填空 true_false=判断 choice=选择 */
+    private String questionType;
+    /** 选择题选项JSON数组 */
+    private String options;
+    /** 正确答案 */
+    private String correctAnswer;
     /** 创建时间 */
     private LocalDateTime createdAt;
 }

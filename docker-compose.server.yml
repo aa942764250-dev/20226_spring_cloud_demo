@@ -1,0 +1,97 @@
+version: '3.8'
+
+# 远程服务器部署（在 154.201.68.122 上运行）
+# - 同样连服务器自身的 MySQL(154.201.68.122:3306) + Nacos(154.201.68.122:8848)
+# - 与本地 docker 的区别：SPRING_PROFILES_ACTIVE=server（master 命名空间，避免与本地 dev 注册冲突）
+# - 注意：springcloud-service / workbench-portal 目前只有 dev profile 可用，
+#         故此处仍用 dev（连同一套远程 Nacos dev + MySQL）；如需完全独立的 master 命名空间，
+#         需再补 springcloud-service/application-server.yml（本次未做）。
+# - 前端（两个，均容器内 nginx，暴露宿主机端口）：
+#     AI教师  -> 80   (Project_008/frontend)
+#     工作台  -> 8090 (根 Project_009_工作台门户前端，/api 直连 springcloud-service:8081)
+# 用法（在服务器上）：
+#   1) 先把 springcloud-demo 目录上传到服务器（或服务器上 mvn package）
+#   2) docker compose -f docker-compose.server.yml up -d --build
+#   3) 访问 http://154.201.68.122 （AI教师） / http://154.201.68.122:8090 （工作台）
+#   4) 停止：docker compose -f docker-compose.server.yml down
+# ⚠️ 本文件仅做结构对齐，未在服务器上实跑验证。
+
+services:
+  gateway:
+    build:
+      context: ./springcloud-gateway
+      dockerfile: Dockerfile
+    container_name: wb-gateway
+    environment:
+      - SPRING_PROFILES_ACTIVE=server
+      - GATEWAY_JWT_SECRET=workbench-secret-key-must-be-at-least-256-bits-long-please-change
+    networks:
+      - wb-net
+
+  workbench-service:
+    build:
+      context: ./workbench-service
+      dockerfile: Dockerfile
+    container_name: wb-workbench
+    environment:
+      - SPRING_PROFILES_ACTIVE=server
+      - WORKBENCH_JWT_SECRET=workbench-secret-key-must-be-at-least-256-bits-long-please-change
+    depends_on:
+      - gateway
+    networks:
+      - wb-net
+
+  ai-teacher-service:
+    build:
+      context: ./ai-teacher-service
+      dockerfile: Dockerfile
+    container_name: wb-ai-teacher
+    environment:
+      - SPRING_PROFILES_ACTIVE=server
+    depends_on:
+      - gateway
+    networks:
+      - wb-net
+
+  # 「工作台」后端：springcloud-service(8081)，复用 dev 连远程 Nacos+MySQL
+  springcloud-service:
+    build:
+      context: ./springcloud-service
+      dockerfile: Dockerfile
+    container_name: wb-springcloud-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    networks:
+      - wb-net
+
+  # AI教师前端（Project_008/frontend）：/api 走网关 gateway:8080
+  workbench-web:
+    build:
+      context: ../Project_008_AI英语教师工作台/frontend
+      dockerfile: Dockerfile
+    container_name: wb-web
+    ports:
+      - "80:80"
+    depends_on:
+      - gateway
+    networks:
+      - wb-net
+
+  # 「工作台」前端（根 Project_009_工作台门户前端）：/api 直连 springcloud-service:8081
+  workbench-portal:
+    build:
+      context: ../Project_009_工作台门户前端
+      dockerfile: Dockerfile
+      args:
+        - VITE_AI_TEACHER_URL=http://154.201.68.122
+    container_name: wb-portal
+    ports:
+      - "8090:80"
+    depends_on:
+      - springcloud-service
+    networks:
+      - wb-net
+
+networks:
+  wb-net:
+    driver: bridge

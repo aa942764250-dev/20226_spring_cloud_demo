@@ -32,4 +32,13 @@ public class Result<T> {
         result.setMessage(message);
         return result;
     }
+
+    // 别名方法，兼容不同写法
+    public static <T> Result<T> ok(T data) {
+        return success(data);
+    }
+
+    public static <T> Result<T> ok() {
+        return success(null);
+    }
 }

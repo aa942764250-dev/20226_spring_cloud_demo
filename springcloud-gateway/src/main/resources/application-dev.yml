@@ -1,4 +1,4 @@
-# 开发环境 (dev namespace)
+# 开发环境 (dev namespace) —— 远程 Nacos 服务发现 + lb 路由
 spring:
   cloud:
     nacos:
@@ -7,3 +7,27 @@ spring:
         namespace: dev
         username: nacos
         password: nacos
+        fail-fast: false
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: workbench-route
+          uri: lb://workbench-service
+          predicates:
+            - Path=/api/wb/**
+          filters:
+            - StripPrefix=1
+        - id: ai-teacher-route
+          uri: lb://ai-teacher-service
+          predicates:
+            - Path=/api/ai-teacher/**
+          filters:
+            - StripPrefix=1
+        - id: service-route
+          uri: lb://springcloud-service
+          predicates:
+            - Path=/api/**
+          filters:
+            - StripPrefix=1

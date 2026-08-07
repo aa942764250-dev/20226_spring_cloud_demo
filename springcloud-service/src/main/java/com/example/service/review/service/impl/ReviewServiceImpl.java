@@ -97,11 +97,11 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     public Result<Void> manualGenerate() {
         try {
-            reviewScheduleGenerator.doGenerate(LocalDate.now());
+            reviewScheduleGenerator.triggerGenerate(LocalDate.now(), "manual");
             return Result.success(null);
         } catch (Exception e) {
-            log.error("手动生成复习内容失败", e);
-            return Result.fail("生成失败: " + e.getMessage());
+            log.error("手动触发生成失败", e);
+            return Result.fail("触发失败: " + e.getMessage());
         }
     }
 

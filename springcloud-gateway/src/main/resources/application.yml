@@ -8,10 +8,15 @@ spring:
     active: dev
   cloud:
     gateway:
-      routes:
-        - id: service-route
-          uri: lb://springcloud-service
-          predicates:
-            - Path=/api/**
-          filters:
-            - StripPrefix=1
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+      # 路由按 profile 定义：application-dev.yml(远程 Nacos lb) / application-local.yml(本地直连)
+gateway:
+  jwt:
+    secret: workbench-secret-key-must-be-at-least-256-bits-long-please-change

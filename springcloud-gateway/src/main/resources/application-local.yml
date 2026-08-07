@@ -1,0 +1,32 @@
+# 本地自包含联调 (local profile) —— 不依赖 Nacos/远程服务，直连本地实例
+spring:
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+      routes:
+        - id: workbench-route
+          uri: http://127.0.0.1:8083
+          predicates:
+            - Path=/api/wb/**
+          filters:
+            - StripPrefix=1
+        - id: ai-teacher-route
+          uri: http://127.0.0.1:8084
+          predicates:
+            - Path=/api/ai-teacher/**
+          filters:
+            - StripPrefix=1
+        - id: service-route
+          uri: http://127.0.0.1:8083
+          predicates:
+            - Path=/api/**
+          filters:
+            - StripPrefix=1
+gateway:
+  jwt:
+    secret: workbench-secret-key-must-be-at-least-256-bits-long-please-change

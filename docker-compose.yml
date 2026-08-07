@@ -1,47 +1,92 @@
 version: '3.8'
 
-# 说明：MySQL 和 Nacos 已部署在远程服务器 154.201.68.122
-# 此 compose 仅用于运行 service 和 gateway 应用
-# 环境隔离通过 SPRING_PROFILES_ACTIVE 控制：dev / master
+# 本地 Docker 容器化部署（6 服务：网关 + 3 后端 + 2 前端）—— 连服务器 MySQL + Nacos
+# - 数据库/模型配置连服务器 MySQL(154.201.68.122:3306) + Nacos(154.201.68.122:8848, dev 命名空间)
+# - 后端：gateway(8080) / workbench-service(8083) / ai-teacher-service(8084) 经网关 lb:// 路由；
+#         springcloud-service(8081) 是「工作台」后端，工作台前端 /api 直连它（避开网关 /api/wb 路由冲突）
+# - 前端（两个，均容器内 nginx，仅暴露宿主机端口）：
+#     工作台  -> http://localhost:8090  (根 Project_009_工作台门户前端，/api 直连 springcloud-service:8081)
+#     AI教师  -> http://localhost:8088  (Project_008/frontend，/api 走网关 gateway:8080)
+# - 远程服务器部署请改用 docker-compose.server.yml（master 命名空间）
+# 构建并启动：docker compose up -d --build
+# 账号 admin / 123456
+# 停止：docker compose down
 
 services:
+  gateway:
+    build:
+      context: ./springcloud-gateway
+      dockerfile: Dockerfile
+    container_name: wb-gateway
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - GATEWAY_JWT_SECRET=workbench-secret-key-must-be-at-least-256-bits-long-please-change
+    networks:
+      - wb-net
+
+  workbench-service:
+    build:
+      context: ./workbench-service
+      dockerfile: Dockerfile
+    container_name: wb-workbench
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - WORKBENCH_JWT_SECRET=workbench-secret-key-must-be-at-least-256-bits-long-please-change
+    depends_on:
+      - gateway
+    networks:
+      - wb-net
+
+  ai-teacher-service:
+    build:
+      context: ./ai-teacher-service
+      dockerfile: Dockerfile
+    container_name: wb-ai-teacher
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      - gateway
+    networks:
+      - wb-net
+
+  workbench-web:
+    build:
+      context: ../Project_008_AI英语教师工作台/frontend
+      dockerfile: Dockerfile
+    container_name: wb-web
+    ports:
+      - "8088:80"
+    depends_on:
+      - gateway
+    networks:
+      - wb-net
+
+  # 「工作台」后端：springcloud-service(8081)，连服务器 Nacos(dev)+远程 MySQL
   springcloud-service:
     build:
-      context: .
-      dockerfile: springcloud-service/Dockerfile
-    container_name: springcloud-service
+      context: ./springcloud-service
+      dockerfile: Dockerfile
+    container_name: wb-springcloud-service
     environment:
-      - SPRING_PROFILES_ACTIVE=master
-      - SPRING_DATASOURCE_URL=jdbc:mysql://154.201.68.122:3306/springcloud_demo?useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      - SPRING_DATASOURCE_USERNAME=app_user
-      - SPRING_DATASOURCE_PASSWORD=App@Remote2026#User
-      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=154.201.68.122:8848
-      - SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE=master
-      - SPRING_CLOUD_NACOS_DISCOVERY_USERNAME=nacos
-      - SPRING_CLOUD_NACOS_DISCOVERY_PASSWORD=nacos
-    ports:
-      - "8081:8081"
+      - SPRING_PROFILES_ACTIVE=dev
     networks:
-      - springcloud-net
+      - wb-net
 
-  springcloud-gateway:
+  # 「工作台」前端（根 Project_009_工作台门户前端）：/api 直连 springcloud-service:8081
+  workbench-portal:
     build:
-      context: .
-      dockerfile: springcloud-gateway/Dockerfile
-    container_name: springcloud-gateway
-    environment:
-      - SPRING_PROFILES_ACTIVE=master
-      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=154.201.68.122:8848
-      - SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE=master
-      - SPRING_CLOUD_NACOS_DISCOVERY_USERNAME=nacos
-      - SPRING_CLOUD_NACOS_DISCOVERY_PASSWORD=nacos
+      context: ../Project_009_工作台门户前端
+      dockerfile: Dockerfile
+      args:
+        - VITE_AI_TEACHER_URL=http://localhost:8088
+    container_name: wb-portal
     ports:
-      - "8080:8080"
+      - "8090:80"
     depends_on:
       - springcloud-service
     networks:
-      - springcloud-net
+      - wb-net
 
 networks:
-  springcloud-net:
+  wb-net:
     driver: bridge

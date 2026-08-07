@@ -1,0 +1,31 @@
+# 本地 docker 部署：连服务器 Nacos(dev) + lb:// 路由
+# 与 dev profile 等价（服务器 MySQL+Nacos），仅运行环境换成容器
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 154.201.68.122:8848
+        namespace: dev
+        username: nacos
+        password: nacos
+        fail-fast: false
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: workbench-route
+          uri: lb://workbench-service
+          predicates:
+            - Path=/api/wb/**
+          filters:
+            - StripPrefix=1
+        - id: ai-teacher-route
+          uri: lb://ai-teacher-service
+          predicates:
+            - Path=/api/ai-teacher/**
+          filters:
+            - StripPrefix=1
+gateway:
+  jwt:
+    secret: ${GATEWAY_JWT_SECRET:workbench-secret-key-must-be-at-least-256-bits-long-please-change}

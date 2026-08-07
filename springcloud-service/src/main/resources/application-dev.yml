@@ -12,6 +12,7 @@ spring:
         namespace: dev
         username: nacos
         password: nacos
+        fail-fast: false
 
 datasource:
   master:
