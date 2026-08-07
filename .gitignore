@@ -9,3 +9,11 @@ target/
 .arts/
 .merkle-snapshot.json
 .codeartsdoer/
+
+# 脚本运行时产物/数据（不应入库）
+__pycache__/
+*.pyc
+*.db
+*.sqlite
+*.sqlite3
+scripts/core/data/
