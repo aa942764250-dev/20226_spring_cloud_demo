@@ -28,6 +28,8 @@ public class Student implements Serializable {
     private String phone;
     /** 备注 */
     private String remark;
+    /** 深圳教研印象标签（JSON 数组字符串，如 ["导图复述要点遗漏","定语从句用法卡顿"]） */
+    private String impressions;
     /** 状态 0=停课 1=在课 */
     private Integer status;
     /** 入学日期 */

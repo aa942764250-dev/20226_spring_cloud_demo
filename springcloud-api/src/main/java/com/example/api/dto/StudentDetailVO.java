@@ -20,6 +20,8 @@ public class StudentDetailVO implements Serializable {
     private String goal;
     private String phone;
     private String remark;
+    /** 深圳教研印象标签（JSON 数组字符串） */
+    private String impressions;
     private Integer status;
     private LocalDate enrollDate;
     /** 能力画像：{listening:4.2, speaking:3.8, ...} */

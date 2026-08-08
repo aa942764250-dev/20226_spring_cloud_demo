@@ -116,3 +116,13 @@ CREATE TABLE IF NOT EXISTS `ai_model_config` (
   PRIMARY KEY (`id`),
   KEY `idx_mc_enabled` (`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 学生印象标签字段（2026-08 新增）：幂等加列，已存在则跳过，可重复执行
+SET @exist_imp := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'student' AND COLUMN_NAME = 'impressions');
+SET @sql_imp := IF(@exist_imp = 0,
+  'ALTER TABLE student ADD COLUMN impressions VARCHAR(2000) DEFAULT NULL COMMENT ''深圳教研印象标签(JSON数组字符串)''',
+  'SELECT 1');
+PREPARE stmt_imp FROM @sql_imp;
+EXECUTE stmt_imp;
+DEALLOCATE PREPARE stmt_imp;

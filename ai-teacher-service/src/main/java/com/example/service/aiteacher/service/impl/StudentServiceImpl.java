@@ -69,6 +69,7 @@ public class StudentServiceImpl implements StudentService {
         vo.setGoal(student.getGoal());
         vo.setPhone(student.getPhone());
         vo.setRemark(student.getRemark());
+        vo.setImpressions(student.getImpressions());
         vo.setStatus(student.getStatus());
         vo.setEnrollDate(student.getEnrollDate());
 

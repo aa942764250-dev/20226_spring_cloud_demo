@@ -30,12 +30,12 @@ public class KnowledgeSearchClient {
         List<Map<String, String>> results = new ArrayList<>();
         try {
             String baseUrl = reviewProperties.getKbServerUrl();
-            if (baseUrl == null || baseUrl.isBlank()) {
+            if (baseUrl == null || baseUrl.trim().isEmpty()) {
                 log.warn("kb-server-url not configured, returning empty results");
                 return results;
             }
 
-            String url = baseUrl + "/search?q=" + java.net.URLEncoder.encode(query, StandardCharsets.UTF_8) + "&top_k=" + topK;
+            String url = baseUrl + "/search?q=" + java.net.URLEncoder.encode(query, "UTF-8") + "&top_k=" + topK;
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(5000);

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS student (
     goal VARCHAR(200) COMMENT '学习目标',
     phone VARCHAR(20) COMMENT '联系电话',
     remark TEXT COMMENT '备注',
+    impressions VARCHAR(2000) DEFAULT NULL COMMENT '深圳教研印象标签(JSON数组字符串)',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '0=停课 1=在课',
     enroll_date DATE COMMENT '入学日期',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
