@@ -48,6 +48,11 @@ services:
     container_name: wb-ai-teacher
     environment:
       - SPRING_PROFILES_ACTIVE=server
+      # 教材原文图片根目录（容器内）。⚠️ 部署事项：需在服务器上把教材图片目录
+      # 放到对应路径并挂载进容器，例如：
+      #   volumes:
+      #     - "/opt/textbook:/data/textbook:ro"
+      - TEXTBOOK_IMAGE_BASE_DIR=/data/textbook
     depends_on:
       - gateway
     networks:

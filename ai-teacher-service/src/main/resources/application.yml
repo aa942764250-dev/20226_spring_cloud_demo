@@ -26,3 +26,8 @@ ai-teacher:
   timeout-seconds: 60
   max-retries: 2
   default-teacher-id: 1
+
+# 教材原文图片根目录：本地 dev 用默认值（Windows 正斜杠路径合法）；
+# Docker 容器通过环境变量 TEXTBOOK_IMAGE_BASE_DIR=/data/textbook 覆盖。
+textbook:
+  image-base-dir: ${TEXTBOOK_IMAGE_BASE_DIR:D:/Workspace/Project_010_英语知识库/data/教材原文}

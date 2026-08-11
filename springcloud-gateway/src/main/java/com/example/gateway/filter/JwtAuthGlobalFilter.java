@@ -31,7 +31,9 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
      * 白名单路径，不需要鉴权
      */
     private static final List<String> WHITELIST = Arrays.asList(
-            "/api/wb/auth/login"
+            "/api/wb/auth/login",
+            // 教材原文图片：浏览器 <img> 无法携带 JWT，需网关白名单放行
+            "/api/ai-teacher/textbook/image"
     );
 
     @Override

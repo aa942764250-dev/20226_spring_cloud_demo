@@ -1,0 +1,35 @@
+# 本地 docker 网关路由覆盖（挂载到 /app/config，优先级高于 jar 内配置）
+# 目的：绕过 Nacos 2.x gRPC 服务发现（跨远程网络不稳定），改用容器名直连后端
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 154.201.68.122:8848
+        namespace: dev
+        username: nacos
+        password: nacos
+        fail-fast: false
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+      routes:
+        - id: workbench-route
+          uri: http://wb-workbench:8083
+          predicates:
+            - Path=/api/wb/**
+          filters:
+            - StripPrefix=1
+        - id: ai-teacher-route
+          uri: http://wb-ai-teacher:8084
+          predicates:
+            - Path=/api/ai-teacher/**
+          filters:
+            - StripPrefix=1
+        - id: service-route
+          uri: http://wb-springcloud-service:8081
+          predicates:
+            - Path=/api/**
+gateway:
+  jwt:
+    secret: ${GATEWAY_JWT_SECRET:workbench-secret-key-must-be-at-least-256-bits-long-please-change}

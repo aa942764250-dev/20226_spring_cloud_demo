@@ -44,6 +44,11 @@ services:
     container_name: wb-ai-teacher
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+      # 教材原文图片根目录（容器内），由下方 volumes 挂载提供
+      - TEXTBOOK_IMAGE_BASE_DIR=/data/textbook
+    volumes:
+      # 宿主机教材原文目录（含中文名），只读挂载进容器
+      - "D:/Workspace/Project_010_英语知识库/data/教材原文:/data/textbook:ro"
     depends_on:
       - gateway
     networks:

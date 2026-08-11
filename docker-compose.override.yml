@@ -1,0 +1,25 @@
+# 本地开发 override：不修改 docker-compose.yml 主文件；docker compose 自动合并。
+services:
+  # 网关补宿主机端口映射，使 vite dev(5180) 的 /api 代理能直达网关
+  gateway:
+    ports:
+      - "8080:8080"
+    # 限制 JVM 堆，避免 4 个后端叠加内存超 Docker 配额被 OOM killer 杀(137)
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx512m -Xss256k
+    # 挂载本地路由覆盖：绕开 Nacos gRPC 服务发现，直连后端容器（本地看效果用）
+    volumes:
+      - ./gateway-config-override:/app/config
+
+  workbench-service:
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx512m -Xss256k
+
+  ai-teacher-service:
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx512m -Xss256k
+
+  # 「工作台」后端：springcloud-service(8081)
+  springcloud-service:
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx512m -Xss256k
