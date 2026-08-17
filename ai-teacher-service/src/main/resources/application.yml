@@ -23,9 +23,13 @@ logging:
 ai-teacher:
   gemini-api-key: ${GEMINI_API_KEY:}
   gemini-model: gemini-2.5-flash
-  timeout-seconds: 60
+  timeout-seconds: 180
   max-retries: 2
   default-teacher-id: 1
+  # Embedding 配置（知识库检索用，硅基流动 bge-m3 免费）
+  embedding-api-url: ${EMBEDDING_API_URL:https://api.siliconflow.cn/v1/embeddings}
+  embedding-api-key: ${EMBEDDING_API_KEY:}
+  embedding-model: ${EMBEDDING_MODEL:BAAI/bge-m3}
 
 # 教材原文图片根目录：本地 dev 用默认值（Windows 正斜杠路径合法）；
 # Docker 容器通过环境变量 TEXTBOOK_IMAGE_BASE_DIR=/data/textbook 覆盖。

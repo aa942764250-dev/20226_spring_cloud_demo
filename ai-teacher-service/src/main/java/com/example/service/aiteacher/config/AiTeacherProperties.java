@@ -23,4 +23,11 @@ public class AiTeacherProperties {
     private Long defaultTeacherId = 1L;
     /** 报告生成任务租约（分钟）：status=5 超过该时间仍视为卡死，由调度器重新认领 */
     private int reportLeaseMinutes = 5;
+
+    /** Embedding API 地址（兼容 OpenAI 格式，如硅基流动 https://api.siliconflow.cn/v1/embeddings） */
+    private String embeddingApiUrl;
+    /** Embedding API Key */
+    private String embeddingApiKey;
+    /** Embedding 模型名（如 BAAI/bge-m3） */
+    private String embeddingModel = "BAAI/bge-m3";
 }

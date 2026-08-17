@@ -19,8 +19,9 @@ public class AsyncConfig {
     @Bean("reportAsyncExecutor")
     public Executor reportAsyncExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(3);
+        // Kimi 免费账号并发限制为 1，串行执行避免 429 Too Many Requests
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("report-gen-");
         // 队列满时由调用线程同步执行，保证任务不丢（最坏情况阻塞提交方，不会丢报告）

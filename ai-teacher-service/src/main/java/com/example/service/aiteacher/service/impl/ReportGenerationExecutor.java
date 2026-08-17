@@ -185,7 +185,8 @@ public class ReportGenerationExecutor {
     private void parseAndFillReport(AiReport report, String aiResult) {
         report.setFullContent(aiResult);
         try {
-            JsonNode node = objectMapper.readTree(stripCodeFence(aiResult));
+            String json = extractJson(aiResult);
+            JsonNode node = objectMapper.readTree(json);
             report.setSummary(getTextOrNull(node, "summary"));
             report.setAbilityAnalysis(getTextOrNull(node, "abilityAnalysis"));
             report.setProblemDiagnosis(getTextOrNull(node, "problemDiagnosis"));
@@ -194,6 +195,18 @@ public class ReportGenerationExecutor {
             log.warn("AI输出非标准JSON，作为summary存储", e);
             report.setSummary(aiResult);
         }
+    }
+
+    /** 从 AI 返回文本中提取 JSON 对象：去掉代码块、取第一个 { 到最后一个 } */
+    private String extractJson(String text) {
+        if (text == null) return null;
+        String t = stripCodeFence(text);
+        int first = t.indexOf('{');
+        int last = t.lastIndexOf('}');
+        if (first != -1 && last != -1 && last > first) {
+            return t.substring(first, last + 1);
+        }
+        return t;
     }
 
     private String stripCodeFence(String text) {

@@ -29,15 +29,24 @@ public class GenerationAsyncExecutor {
 
     private static final LinkedHashMap<String, String[]> MODULE_QUERIES = new LinkedHashMap<>();
     static {
-        MODULE_QUERIES.put("Java基础", new String[]{"Java基本类型", "String StringBuilder", "final关键字"});
-        MODULE_QUERIES.put("集合框架", new String[]{"HashMap原理", "ArrayList LinkedList", "ConcurrentHashMap"});
-        MODULE_QUERIES.put("多线程与锁", new String[]{"synchronized原理", "ReentrantLock", "volatile关键字"});
+        MODULE_QUERIES.put("Java基础", new String[]{"值传递与引用", "equals hashCode", "String StringBuilder", "异常体系", "泛型与反射", "Stream API"});
+        MODULE_QUERIES.put("集合框架", new String[]{"HashMap原理", "ConcurrentHashMap", "ArrayList LinkedList", "TreeMap红黑树", "fail-fast"});
+        MODULE_QUERIES.put("并发与锁", new String[]{"synchronized锁升级", "ReentrantLock", "volatile原理", "AQS原理", "CAS与ABA", "ThreadLocal"});
         MODULE_QUERIES.put("线程池", new String[]{"ThreadPoolExecutor参数", "线程池拒绝策略", "线程池工作原理"});
-        MODULE_QUERIES.put("JVM", new String[]{"JVM内存模型", "GC算法", "类加载机制"});
-        MODULE_QUERIES.put("Spring", new String[]{"Spring IOC原理", "Spring AOP", "Spring Bean生命周期"});
-        MODULE_QUERIES.put("MySQL", new String[]{"MySQL索引原理", "事务隔离级别", "InnoDB存储引擎"});
-        MODULE_QUERIES.put("Redis", new String[]{"Redis数据类型", "Redis持久化", "Redis集群"});
-        MODULE_QUERIES.put("设计模式", new String[]{"单例模式", "工厂模式", "策略模式"});
+        MODULE_QUERIES.put("JVM", new String[]{"JVM内存模型", "GC算法与收集器", "类加载机制", "G1与ZGC", "OOM处理", "线上排查工具"});
+        MODULE_QUERIES.put("IO与网络", new String[]{"BIO NIO AIO", "TCP三次握手", "HTTP版本演进", "epoll多路复用", "HTTPS TLS"});
+        MODULE_QUERIES.put("Spring", new String[]{"IOC与Bean生命周期", "AOP代理", "循环依赖三级缓存", "Spring事务传播", "Spring Boot自动配置"});
+        MODULE_QUERIES.put("MyBatis", new String[]{"MyBatis一二级缓存", "#{}与${}", "N+1问题与深分页"});
+        MODULE_QUERIES.put("MySQL", new String[]{"B+Tree索引", "MVCC多版本并发", "行锁间隙锁", "事务隔离级别", "redo undo binlog", "EXPLAIN执行计划"});
+        MODULE_QUERIES.put("Redis", new String[]{"Redis数据类型", "Redis持久化与集群", "缓存三大问题", "Redis分布式锁", "缓存一致性", "跳表结构"});
+        MODULE_QUERIES.put("分库分表", new String[]{"分库分表方式", "全局唯一ID", "跨库JOIN与分页"});
+        MODULE_QUERIES.put("消息队列", new String[]{"Kafka为什么快", "Kafka架构", "RocketMQ事务消息", "消息可靠性"});
+        MODULE_QUERIES.put("微服务与分布式", new String[]{"Spring Cloud Gateway", "CAP与BASE", "分布式事务Seata", "Nacos注册中心", "Sentinel限流", "幂等处理"});
+        MODULE_QUERIES.put("RPC与Dubbo", new String[]{"RPC原理", "Dubbo SPI机制", "ZAB协议与ZK选举", "Dubbo负载均衡"});
+        MODULE_QUERIES.put("Elasticsearch", new String[]{"倒排索引", "ES写入流程", "BM25评分"});
+        MODULE_QUERIES.put("Docker", new String[]{"Docker底层技术", "容器与虚拟机对比"});
+        MODULE_QUERIES.put("数据结构与算法", new String[]{"LRU缓存实现", "一致性哈希", "二分查找"});
+        MODULE_QUERIES.put("设计模式", new String[]{"单例模式", "工厂模式", "策略模式", "责任链模式", "观察者模式", "动态代理"});
     }
 
     @Async
@@ -110,7 +119,7 @@ public class GenerationAsyncExecutor {
 
     int[] doGenerate(LocalDate date) {
         List<ReviewItem> allItems = new ArrayList<>();
-        Set<String> seenQuestions = new HashSet<>();
+        Set<String> seenKeys = new HashSet<>();
         int sortOrder = 0;
 
         for (Map.Entry<String, String[]> entry : MODULE_QUERIES.entrySet()) {
@@ -119,10 +128,14 @@ public class GenerationAsyncExecutor {
                 List<Map<String, String>> results = knowledgeSearchClient.search(query, 3);
                 for (Map<String, String> result : results) {
                     String question = result.get("question");
-                    if (question == null || question.isEmpty() || seenQuestions.contains(question)) {
+                    if (question == null || question.isEmpty()) {
                         continue;
                     }
-                    seenQuestions.add(question);
+                    String dedupKey = result.getOrDefault("dedupKey", question);
+                    if (seenKeys.contains(dedupKey)) {
+                        continue;
+                    }
+                    seenKeys.add(dedupKey);
                     ReviewItem item = new ReviewItem();
                     item.setModuleName(moduleName);
                     item.setQuestion(question);

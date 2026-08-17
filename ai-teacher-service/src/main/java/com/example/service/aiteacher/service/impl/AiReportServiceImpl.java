@@ -57,6 +57,28 @@ public class AiReportServiceImpl implements AiReportService {
             endDate = LocalDate.parse(request.getEndDate());
         }
 
+        // 防重校验：同一学生 + 同一报告类型 + 同一日期范围，取最新版本
+        LambdaQueryWrapper<AiReport> existWrapper = new LambdaQueryWrapper<>();
+        existWrapper.eq(AiReport::getStudentId, studentId)
+                .eq(AiReport::getReportType, reportType)
+                .eq(AiReport::getStartDate, startDate)
+                .eq(AiReport::getEndDate, endDate)
+                .orderByDesc(AiReport::getVersion);
+        List<AiReport> existReports = aiReportDao.selectList(existWrapper);
+        int nextVersion = 1;
+        if (!existReports.isEmpty()) {
+            AiReport latest = existReports.get(0);
+            nextVersion = latest.getVersion() + 1;
+            int st = latest.getStatus();
+            if (st == 4 || st == 5) {
+                return Result.fail("该周期报告正在生成中，请稍候再试");
+            }
+            if (st == 1) {
+                return Result.fail("该周期报告待审核中，无需重复生成");
+            }
+            // 已发布(2)→生成新版本；草稿(0)/驳回(3)→允许重新生成
+        }
+
         // 查询学习记录
         LambdaQueryWrapper<LearningRecord> lrWrapper = new LambdaQueryWrapper<>();
         lrWrapper.eq(LearningRecord::getStudentId, studentId)
@@ -65,31 +87,11 @@ public class AiReportServiceImpl implements AiReportService {
         List<LearningRecord> records = learningRecordDao.selectList(lrWrapper);
 
         if (records.isEmpty()) {
-            // 本周期无学习记录：同步生成"无数据"占位报告并返回 200，
-            // 避免批量生成时因个别学生无记录而整批报错。
+            // 本周期无学习记录：直接返回失败，不生成空报告，避免列表出现大量无数据占位
             Student student = studentDao.selectById(studentId);
-            AiReport emptyReport = new AiReport();
-            emptyReport.setTeacherId(properties.getDefaultTeacherId());
-            emptyReport.setStudentId(studentId);
-            emptyReport.setReportType(reportType);
-            emptyReport.setStartDate(startDate);
-            emptyReport.setEndDate(endDate);
-            emptyReport.setTitle(String.format("%s %s报告", student != null ? student.getName() : "学生",
-                    typeLabel(reportType)));
-            emptyReport.setStatus(0);
-            emptyReport.setVersion(1);
-            emptyReport.setModelName("—");
-            emptyReport.setSummary("该时间段内无学习记录，暂无法生成分析报告。请确认学生已录入学习记录后再生成。");
-            emptyReport.setAbilityAnalysis("—");
-            emptyReport.setProblemDiagnosis("—");
-            emptyReport.setTeachingSuggestion("—");
-            emptyReport.setFullContent("本" + typeLabel(reportType) + "周期（" + startDate + " 至 " + endDate + "）未查询到该学生的学习记录，已生成空模板" + typeLabel(reportType) + "报。");
-            emptyReport.setReviewNote("该时间段内无学习记录，已生成空模板");
-            emptyReport.setCreatedAt(LocalDateTime.now());
-            emptyReport.setUpdatedAt(LocalDateTime.now());
-            aiReportDao.insert(emptyReport);
-            log.info("学生无学习记录，生成空模板报告: id={}, studentId={}", emptyReport.getId(), studentId);
-            return Result.success(emptyReport.getId());
+            String name = student != null ? student.getName() : "该学生";
+            log.info("学生无学习记录，跳过生成: studentId={}, name={}", studentId, name);
+            return Result.fail(name + "在该周期内无学习记录，请先录入后再生成");
         }
 
         // 有数据：读取 Prompt 模板与模型配置，写入"生成中"记录后异步生成
@@ -123,7 +125,7 @@ public class AiReportServiceImpl implements AiReportService {
         report.setTitle(String.format("%s %s报告", student != null ? student.getName() : "学生",
                 typeLabel(reportType)));
         report.setStatus(STATUS_GENERATING); // 生成中
-        report.setVersion(1);
+        report.setVersion(nextVersion);
         report.setModelName(model != null ? model : properties.getGeminiModel());
         if (template != null) {
             report.setPromptTemplateId(template.getId());
@@ -172,6 +174,9 @@ public class AiReportServiceImpl implements AiReportService {
         if (report == null) {
             return Result.fail(404, "报告不存在");
         }
+        if (report.getStatus() != 1) {
+            return Result.fail("只有待审核状态的报告才能进行审核操作");
+        }
         report.setStatus(status);
         report.setReviewNote(reviewNote);
         report.setUpdatedAt(LocalDateTime.now());
@@ -181,6 +186,11 @@ public class AiReportServiceImpl implements AiReportService {
 
     @Override
     public Result<Void> updateReport(AiReport report) {
+        AiReport existing = aiReportDao.selectById(report.getId());
+        if (existing != null && existing.getStatus() == 3) {
+            // 已驳回的报告编辑后自动回到待审核
+            report.setStatus(1);
+        }
         report.setUpdatedAt(LocalDateTime.now());
         aiReportDao.updateById(report);
         return Result.success(null);

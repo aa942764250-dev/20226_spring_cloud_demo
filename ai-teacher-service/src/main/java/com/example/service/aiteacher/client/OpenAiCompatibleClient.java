@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
@@ -25,6 +26,8 @@ public class OpenAiCompatibleClient implements LlmClient {
     private final AiTeacherProperties properties;
     private final ObjectMapper objectMapper;
     private RestTemplate restTemplate;
+    /** 全局 LLM 调用锁：Kimi 免费账号并发=1，所有调用串行化 */
+    private static final Object LLM_LOCK = new Object();
 
     @PostConstruct
     public void init() {
@@ -42,50 +45,70 @@ public class OpenAiCompatibleClient implements LlmClient {
             log.warn("OpenAiCompatibleClient 缺少 baseUrl 或 apiKey，跳过调用");
             return null;
         }
+        // Kimi 免费账号并发=1，全局串行化
+        synchronized (LLM_LOCK) {
+            return doGenerate(baseUrl, model, apiKey, systemPrompt, userPrompt);
+        }
+    }
+
+    private String doGenerate(String baseUrl, String model, String apiKey, String systemPrompt, String userPrompt) {
         String url = baseUrl.endsWith("/") ? baseUrl + "chat/completions" : baseUrl + "/chat/completions";
-        try {
-            Map<String, Object> sysMsg = new HashMap<>();
-            sysMsg.put("role", "system");
-            sysMsg.put("content", systemPrompt);
-            Map<String, Object> userMsg = new HashMap<>();
-            userMsg.put("role", "user");
-            userMsg.put("content", userPrompt);
+        // 429 最多重试 3 次，每次等待递增
+        for (int attempt = 0; attempt <= 3; attempt++) {
+            try {
+                Map<String, Object> sysMsg = new HashMap<>();
+                sysMsg.put("role", "system");
+                sysMsg.put("content", systemPrompt);
+                Map<String, Object> userMsg = new HashMap<>();
+                userMsg.put("role", "user");
+                userMsg.put("content", userPrompt);
 
-            Map<String, Object> body = new HashMap<>();
-            body.put("model", model);
-            body.put("messages", Arrays.asList(sysMsg, userMsg));
-            // Kimi K2 系列推理模型强制 temperature=1；其余 OpenAI 兼容模型用 0.7
-            double temperature = (baseUrl != null && baseUrl.contains("moonshot")) ? 1.0 : 0.7;
-            body.put("temperature", temperature);
-            // K2 为推理模型，reasoning 会消耗较多 token，输出上限放宽到 8192
-            body.put("max_tokens", 8192);
+                Map<String, Object> body = new HashMap<>();
+                body.put("model", model);
+                body.put("messages", Arrays.asList(sysMsg, userMsg));
+                double temperature = (baseUrl != null && baseUrl.contains("moonshot")) ? 1.0 : 0.7;
+                body.put("temperature", temperature);
+                body.put("max_tokens", 8192);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.setBearerAuth(apiKey);
 
-            String json = objectMapper.writeValueAsString(body);
-            HttpEntity<String> entity = new HttpEntity<>(json, headers);
+                String json = objectMapper.writeValueAsString(body);
+                HttpEntity<String> entity = new HttpEntity<>(json, headers);
 
-            ResponseEntity<String> resp = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-            if (resp.getStatusCode() == HttpStatus.OK && resp.getBody() != null) {
-                JsonNode root = objectMapper.readTree(resp.getBody());
-                JsonNode choices = root.get("choices");
-                if (choices != null && choices.isArray() && choices.size() > 0) {
-                    JsonNode msg = choices.get(0).get("message");
-                    if (msg != null) {
-                        JsonNode content = msg.get("content");
-                        if (content != null && !content.asText().isEmpty()) {
-                            return content.asText();
+                ResponseEntity<String> resp = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+                if (resp.getStatusCode() == HttpStatus.OK && resp.getBody() != null) {
+                    JsonNode root = objectMapper.readTree(resp.getBody());
+                    JsonNode choices = root.get("choices");
+                    if (choices != null && choices.isArray() && choices.size() > 0) {
+                        JsonNode msg = choices.get(0).get("message");
+                        if (msg != null) {
+                            JsonNode content = msg.get("content");
+                            if (content != null && !content.asText().isEmpty()) {
+                                return content.asText();
+                            }
                         }
                     }
+                    log.warn("OpenAI兼容接口返回结构异常: {}", mask(resp.getBody()));
+                    return null;
+                } else {
+                    log.warn("OpenAI兼容接口HTTP状态异常: {}", resp.getStatusCode());
+                    return null;
                 }
-                log.warn("OpenAI兼容接口返回结构异常: {}", mask(resp.getBody()));
-            } else {
-                log.warn("OpenAI兼容接口HTTP状态异常: {}", resp.getStatusCode());
+            } catch (HttpStatusCodeException e) {
+                if (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS && attempt < 3) {
+                    long waitMs = 3000L * (attempt + 1);
+                    log.warn("Kimi 429 限流，{}ms 后重试 ({}/3)", waitMs, attempt + 1);
+                    try { Thread.sleep(waitMs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return null; }
+                    continue;
+                }
+                log.error("OpenAI兼容接口调用失败 baseUrl={} model={} key={}", baseUrl, model, maskKey(apiKey), e);
+                return null;
+            } catch (Exception e) {
+                log.error("OpenAI兼容接口调用失败 baseUrl={} model={} key={}", baseUrl, model, maskKey(apiKey), e);
+                return null;
             }
-        } catch (Exception e) {
-            log.error("OpenAI兼容接口调用失败 baseUrl={} model={} key={}", baseUrl, model, maskKey(apiKey), e);
         }
         return null;
     }
