@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识库双后端设计方案 · 演示图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: #F7F7F5;
+    color: #2C2C2A;
+    line-height: 1.6;
+    padding: 40px 16px 60px;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; color: #26215C; }
+  .sub { font-size: 13px; color: #5F5E5A; margin: 6px 0 28px; }
+  .card {
+    background: #FFFFFF;
+    border: 1px solid #E5E3DA;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .card h2 { font-size: 16px; font-weight: 600; color: #3C3489; margin-bottom: 4px; }
+  .card .desc { font-size: 13px; color: #5F5E5A; margin-bottom: 16px; }
+  .card svg { width: 100%; height: auto; display: block; }
+  .note {
+    background: #FAEEDA;
+    border: 1px solid #F0D9A8;
+    border-radius: 12px;
+    padding: 16px 20px;
+    font-size: 13px;
+    color: #633806;
+  }
+  .note b { color: #412402; }
+  .th { font-size: 14px; font-weight: 500; }
+  .ts { font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>知识库双后端设计方案 · 演示图</h1>
+  <div class="sub">springcloud-service（工作台后端 8081） · IMA 云端 + 本地 kb_server · 2026-08-19 · 已编译通过</div>
+
+  <div class="card">
+    <h2>图 1 · 运行时架构与调用链</h2>
+    <div class="desc">上游零改动 → KnowledgeSearchClient 按 review.kb-mode 路由 → 双后端并行检索 → 统一契约返回；任一后端失败只降级不报错。</div>
+    <svg viewBox="0 0 680 626" xmlns="http://www.w3.org/2000/svg" role="img">
+      <title>知识库双后端架构：上游经路由按 kb-mode 分发到 IMA 云端或本地 kb_server，both 模式双查合并去重</title>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g>
+        <rect x="70" y="40" width="240" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+        <text class="th" x="190" y="58" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">SelfTestQuestionGenerator</text>
+        <text class="ts" x="190" y="78" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">search(query, 2)</text>
+      </g>
+      <g>
+        <rect x="370" y="40" width="240" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+        <text class="th" x="490" y="58" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">GenerationAsyncExecutor</text>
+        <text class="ts" x="490" y="78" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">search(query, 3)</text>
+      </g>
+      <path d="M190 96 V126" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M490 96 V126" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <g>
+        <rect x="140" y="130" width="400" height="64" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+        <text class="th" x="340" y="152" text-anchor="middle" dominant-baseline="central" fill="#3C3489">KnowledgeSearchClient · 检索路由</text>
+        <text class="ts" x="340" y="176" text-anchor="middle" dominant-baseline="central" fill="#534AB7">review.kb-mode = ima | local | both</text>
+      </g>
+      <path d="M266 194 V216 H180 V236" fill="none" stroke="#0F6E56" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M414 194 V216 H500 V236" fill="none" stroke="#185FA5" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text class="ts" x="223" y="208" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">ima / both</text>
+      <text class="ts" x="457" y="208" text-anchor="middle" dominant-baseline="central" fill="#185FA5">local / both</text>
+      <g>
+        <rect x="40" y="240" width="280" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+        <text class="th" x="180" y="262" text-anchor="middle" dominant-baseline="central" fill="#085041">ImaKnowledgeSearcher</text>
+        <text class="ts" x="180" y="282" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">云端 · IMA OpenAPI</text>
+      </g>
+      <g>
+        <rect x="360" y="240" width="280" height="56" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+        <text class="th" x="500" y="262" text-anchor="middle" dominant-baseline="central" fill="#0C447C">LocalKbServerSearcher</text>
+        <text class="ts" x="500" y="282" text-anchor="middle" dominant-baseline="central" fill="#185FA5">本地 · 自部署 kb_server</text>
+      </g>
+      <path d="M180 296 V326" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M500 296 V326" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <g>
+        <rect x="40" y="330" width="280" height="96" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+        <text class="ts" x="180" y="350" text-anchor="middle" dominant-baseline="central" fill="#444441">POST ima.tencent.com/wiki/v1</text>
+        <text class="ts" x="180" y="369" text-anchor="middle" dominant-baseline="central" fill="#444441">/knowledge/search</text>
+        <text class="ts" x="180" y="388" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">头: ima-openapi-clientid / apikey</text>
+        <text class="ts" x="180" y="407" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">体: {knowledge_id, query, top_k}</text>
+      </g>
+      <g>
+        <rect x="360" y="330" width="280" height="96" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+        <text class="ts" x="500" y="350" text-anchor="middle" dominant-baseline="central" fill="#444441">GET {kb-server-url}/search</text>
+        <text class="ts" x="500" y="369" text-anchor="middle" dominant-baseline="central" fill="#444441">默认 http://127.0.0.1:9876</text>
+        <text class="ts" x="500" y="388" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">kb_server.py · Project_006</text>
+        <text class="ts" x="500" y="407" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">Qdrant 向量库 + SQLite</text>
+      </g>
+      <path d="M180 426 V456" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M500 426 V456" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <g>
+        <rect x="40" y="460" width="280" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+        <text class="th" x="180" y="482" text-anchor="middle" dominant-baseline="central" fill="#085041">腾讯 IMA 知识库</text>
+        <text class="ts" x="180" y="502" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">英语知识库已上传 · 自动向量化</text>
+      </g>
+      <g>
+        <rect x="360" y="460" width="280" height="56" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+        <text class="th" x="500" y="482" text-anchor="middle" dominant-baseline="central" fill="#0C447C">本地知识资产</text>
+        <text class="ts" x="500" y="502" text-anchor="middle" dominant-baseline="central" fill="#185FA5">data/documents · HTML 索引</text>
+      </g>
+      <g>
+        <rect x="40" y="550" width="600" height="56" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
+        <text class="th" x="340" y="572" text-anchor="middle" dominant-baseline="central" fill="#633806">both（默认）：双查合并 · 按 dedupKey 去重 · IMA 优先</text>
+        <text class="ts" x="340" y="592" text-anchor="middle" dominant-baseline="central" fill="#854F0B">统一返回 {question, answer, source, dedupKey} — 上游契约不变</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="card">
+    <h2>图 2 · 部署与凭证注入</h2>
+    <div class="desc">本地与远程共用同一套环境变量，凭证只存在于 ima.qq.com 与宿主机 env，永不进代码仓库。</div>
+    <svg viewBox="0 0 680 486" xmlns="http://www.w3.org/2000/svg" role="img">
+      <title>部署与配置注入：本地 application.yml 与远程 docker-compose 均从环境变量读取 IMA 凭证</title>
+      <defs>
+        <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g>
+        <rect x="40" y="40" width="280" height="56" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+        <text class="th" x="180" y="62" text-anchor="middle" dominant-baseline="central" fill="#0C447C">本地开发</text>
+        <text class="ts" x="180" y="82" text-anchor="middle" dominant-baseline="central" fill="#185FA5">application.yml（review 段）</text>
+      </g>
+      <g>
+        <rect x="360" y="40" width="280" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+        <text class="th" x="500" y="62" text-anchor="middle" dominant-baseline="central" fill="#3C3489">远程服务器</text>
+        <text class="ts" x="500" y="82" text-anchor="middle" dominant-baseline="central" fill="#534AB7">docker-compose.server.yml</text>
+      </g>
+      <path d="M180 96 V126" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow2)"/>
+      <path d="M500 96 V126" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow2)"/>
+      <g>
+        <rect x="40" y="130" width="280" height="104" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+        <text class="ts" x="180" y="152" text-anchor="middle" dominant-baseline="central" fill="#444441">kb-mode: ${KB_MODE:both}</text>
+        <text class="ts" x="180" y="172" text-anchor="middle" dominant-baseline="central" fill="#444441">ima-client-id: ${IMA_CLIENT_ID:}</text>
+        <text class="ts" x="180" y="192" text-anchor="middle" dominant-baseline="central" fill="#444441">ima-api-key: ${IMA_API_KEY:}</text>
+        <text class="ts" x="180" y="212" text-anchor="middle" dominant-baseline="central" fill="#444441">ima-knowledge-id: ${IMA_KNOWLEDGE_ID:}</text>
+      </g>
+      <g>
+        <rect x="360" y="130" width="280" height="104" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+        <text class="ts" x="500" y="152" text-anchor="middle" dominant-baseline="central" fill="#444441">wb-springcloud-service 容器</text>
+        <text class="ts" x="500" y="172" text-anchor="middle" dominant-baseline="central" fill="#444441">environment: KB_MODE / IMA_*</text>
+        <text class="ts" x="500" y="192" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">宿主机 .env 或 export 注入</text>
+        <text class="ts" x="500" y="212" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">凭证不进仓库 · 不硬编码</text>
+      </g>
+      <path d="M180 290 V240" fill="none" stroke="#854F0B" stroke-width="1.5" marker-end="url(#arrow2)"/>
+      <path d="M500 290 V240" fill="none" stroke="#854F0B" stroke-width="1.5" marker-end="url(#arrow2)"/>
+      <g>
+        <rect x="40" y="290" width="600" height="76" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
+        <text class="th" x="340" y="314" text-anchor="middle" dominant-baseline="central" fill="#633806">ima.qq.com/agent-interface（凭证来源）</text>
+        <text class="ts" x="340" y="340" text-anchor="middle" dominant-baseline="central" fill="#854F0B">生成 client_id / api_key（只展示一次）· 上传英语知识库获得 knowledge_id</text>
+      </g>
+      <path d="M340 410 V370" fill="none" stroke="#0F6E56" stroke-width="1.5" marker-end="url(#arrow2)"/>
+      <g>
+        <rect x="40" y="410" width="600" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+        <text class="th" x="340" y="432" text-anchor="middle" dominant-baseline="central" fill="#085041">Project_010/output 英语知识库 HTML</text>
+        <text class="ts" x="340" y="452" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">上传 IMA 自动向量化 · 不支持 HTML 则先转 PDF</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="note">
+    <b>启用云端三步</b>：① ima.qq.com/agent-interface 生成 client_id / api_key（只展示一次，立即保存）② 上传 Project_010/output 英语知识库到 IMA，记下 knowledge_id ③ 本地或远程注入环境变量（KB_MODE / IMA_CLIENT_ID / IMA_API_KEY / IMA_KNOWLEDGE_ID）后重启。<br>
+    <b>详细操作</b>见同目录《知识库双后端IMA对接说明.md》。
+  </div>
+</div>
+</body>
+</html>

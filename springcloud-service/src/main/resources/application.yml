@@ -44,6 +44,12 @@ review:
   kb-server-url: http://127.0.0.1:9876
   search-timeout-seconds: 30
   enabled: true
+  # 知识库后端模式: ima | local | both(双查合并去重)
+  kb-mode: ${KB_MODE:both}
+  # IMA 知识库 OpenAPI(ima.qq.com/agent-interface 生成；远程部署用 env 注入，勿硬编码)
+  ima-client-id: ${IMA_CLIENT_ID:}
+  ima-api-key: ${IMA_API_KEY:}
+  ima-knowledge-id: ${IMA_KNOWLEDGE_ID:}
 
 ai-teacher:
   gemini-api-key: ${GEMINI_API_KEY:}

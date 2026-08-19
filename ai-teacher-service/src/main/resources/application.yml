@@ -1,4 +1,4 @@
-server:
+﻿server:
   port: 8084
 
 spring:
@@ -35,3 +35,4 @@ ai-teacher:
 # Docker 容器通过环境变量 TEXTBOOK_IMAGE_BASE_DIR=/data/textbook 覆盖。
 textbook:
   image-base-dir: ${TEXTBOOK_IMAGE_BASE_DIR:D:/Workspace/Project_010_英语知识库/data/教材原文}
+

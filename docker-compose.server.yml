@@ -66,6 +66,12 @@ services:
     container_name: wb-springcloud-service
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      # 知识库双后端模式: ima | local | both(双查合并去重, 默认)
+      - KB_MODE=${KB_MODE:-both}
+      # IMA 知识库 OpenAPI 凭证: 部署时宿主机 export 或项目根 .env 文件注入, 勿提交仓库
+      - IMA_CLIENT_ID=${IMA_CLIENT_ID:-}
+      - IMA_API_KEY=${IMA_API_KEY:-}
+      - IMA_KNOWLEDGE_ID=${IMA_KNOWLEDGE_ID:-}
     networks:
       - wb-net
 
